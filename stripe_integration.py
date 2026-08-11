@@ -58,7 +58,7 @@ def _ts(unix):
 
 @bp.route('/api/checkout/<plan_key>', methods=['POST'])
 def create_checkout(plan_key):
-    import autoclip_auth
+    import auth as autoclip_auth
     user = autoclip_auth.get_current_user()
     if not user:
         return jsonify({'error': 'not authenticated'}), 401
@@ -106,7 +106,7 @@ def create_checkout(plan_key):
 
 @bp.route('/api/billing_portal', methods=['POST'])
 def billing_portal():
-    import autoclip_auth
+    import auth as autoclip_auth
     user = autoclip_auth.get_current_user()
     if not user:
         return jsonify({'error': 'not authenticated'}), 401
@@ -128,8 +128,29 @@ def billing_portal():
 # Webhook
 # ─────────────────────────────────────────────────────────────
 
+def _d(obj):
+    """Stripe objects override __getattr__, so .get() raises KeyError('get').
+    Normalize to a plain dict before any dict-style access."""
+    if obj is None:
+        return {}
+    if isinstance(obj, dict):
+        return dict(obj)
+    # stripe>=15: StripeObject has .to_dict(); dict(obj) raises KeyError.
+    to_dict = getattr(obj, 'to_dict', None)
+    if callable(to_dict):
+        try:
+            return to_dict()
+        except Exception:
+            pass
+    try:
+        return {k: obj[k] for k in obj.keys()}
+    except Exception:
+        return {}
+
+
 def _user_for_event(obj):
     """Resolve a user from metadata first, then customer id."""
+    obj = _d(obj)
     d = db.get_db()
     uid = (obj.get('metadata') or {}).get('autoclip_user_id')
     if uid:
@@ -146,15 +167,19 @@ def _user_for_event(obj):
 
 def _apply_subscription(user, sub):
     """Write subscription state + tiers for one subscription object."""
+    sub = _d(sub)
     d = db.get_db()
     status = sub.get('status')
     sub_id = sub.get('id')
 
-    items = (sub.get('items') or {}).get('data') or []
-    price_id = items[0]['price']['id'] if items else None
+    items = (_d(sub.get('items')).get('data')) or []
+    price_id = (_d(_d(items[0]).get('price')).get('id')) if items else None
     product, tier = stripe_config.plan_for_price(price_id) if price_id else (None, None)
 
-    period_end = _ts(sub.get('current_period_end'))
+    # Newer Stripe API versions moved current_period_end onto the subscription
+    # item; older ones keep it on the subscription. Check both.
+    _item0 = _d(items[0]) if items else {}
+    period_end = _ts(_item0.get('current_period_end') or sub.get('current_period_end'))
 
     d.execute(
         "UPDATE users SET stripe_subscription_id=?, subscription_status=?, "
@@ -197,7 +222,7 @@ def webhook():
         return jsonify({'error': 'invalid signature'}), 400
 
     etype = event['type']
-    obj = event['data']['object']
+    obj = _d(event['data']['object'])
     log.info('stripe webhook: %s', etype)
 
     try:
