@@ -80,7 +80,7 @@ def _inject_trial_context():
         if not u:
             return {'trial': {'authed': False}}
         try:
-            _db = db.get_db()
+            _db = autoclip_db.get_db()
         except Exception:
             _db = None
         return {'trial': _plans.usage_context(u, _db)}
@@ -1256,7 +1256,13 @@ def _finish_publish_job(job_id):
             _yt = segment.get('youtube', {}) or {}
 
             title = payload.get('title') or _yt.get('title') or segment.get('title') or 'Untitled'
-            description = payload.get('description') or _yt.get('description') or segment.get('description') or ''
+            # AI/user text, then compose with ad blurbs + channel base description
+            _ai_desc = payload.get('description') or _yt.get('description') or segment.get('description') or ''
+            try:
+                description = compose_youtube_description(session, segment, ai_text=_ai_desc)
+            except Exception as _e:
+                app.logger.error('description compose failed, using raw: %s', _e)
+                description = _ai_desc
             privacy = payload.get('privacy') or _yt.get('privacy') or job.get('privacy') or 'private'
             tags = payload.get('tags') or _yt.get('tags') or []
             category_id = str(payload.get('category_id') or _yt.get('category_id') or 22)
@@ -2650,6 +2656,66 @@ def _fetch_channel_recent_content(youtube_channel_id, max_results=15):
         app.logger.warning(f"Failed to fetch channel content: {e}")
         return [], []
 
+
+
+
+# __DESCRIPTION_COMPOSER_V1__
+DESCRIPTION_ORDERS = {
+    'ai_ads_base': ('ai', 'ads', 'base'),
+    'base_ai_ads': ('base', 'ai', 'ads'),
+    'ai_base_ads': ('ai', 'base', 'ads'),
+}
+
+
+def compose_youtube_description(session, segment, ai_text=None, channel_row=None):
+    """
+    Assemble the final YouTube description from three parts:
+      ai   - AI-generated text about this specific clip
+      ads  - description_text of whichever intro/mid/outro ads are selected
+      base - the channel's base_description boilerplate
+
+    Order is per-channel (channels.description_order). Missing parts are
+    skipped, not left as blank gaps. Result is clamped to YouTube's 5000
+    char limit.
+    """
+    d = autoclip_db.get_db()
+
+    if channel_row is None:
+        cid = session.get('channel_id')
+        if cid:
+            channel_row = d.execute(
+                "SELECT base_description, description_order FROM channels WHERE id=?",
+                (cid,)
+            ).fetchone()
+    ch = dict(channel_row) if channel_row else {}
+
+    order_key = (ch.get('description_order') or 'ai_ads_base')
+    order = DESCRIPTION_ORDERS.get(order_key, DESCRIPTION_ORDERS['ai_ads_base'])
+
+    # AI part: explicit arg wins, else whatever is already on the segment
+    ai = (ai_text if ai_text is not None else segment.get('description')) or ''
+    ai = ai.strip()
+
+    # Ads part: intro, mid, outro in that order, de-duplicated
+    ad_ids = [segment.get('intro_ad_id'), segment.get('mid_ad_id'), segment.get('outro_ad_id')]
+    ad_texts, seen = [], set()
+    for aid in ad_ids:
+        if not aid or aid in seen:
+            continue
+        seen.add(aid)
+        row = d.execute("SELECT description_text FROM ads WHERE id=?", (aid,)).fetchone()
+        if row:
+            t = (dict(row).get('description_text') or '').strip()
+            if t and t not in ad_texts:
+                ad_texts.append(t)
+    ads = "\n\n".join(ad_texts)
+
+    base = (ch.get('base_description') or '').strip()
+
+    parts = {'ai': ai, 'ads': ads, 'base': base}
+    chunks = [parts[k] for k in order if parts.get(k)]
+    out = "\n\n".join(chunks).strip()
+    return out[:5000]
 
 
 # __SEGMENT_TRANSCRIPT_V1__
