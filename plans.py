@@ -105,3 +105,93 @@ def audio_usage_this_month(db, user_id):
     """Placeholder for audio usage — wire up when Phase 5 audio tables exist."""
     # TODO: when audio publish table exists, count from it
     return 0
+
+
+# __TRIAL_ENFORCEMENT_V1__
+# ─────────────────────────────────────────────────────────────
+# Trial + cap enforcement
+# ─────────────────────────────────────────────────────────────
+from datetime import datetime, timezone
+
+DEMO_SESSION_LIMIT = 3
+
+def is_on_trial(user):
+    """Is this user currently in an active demo trial?"""
+    if not user:
+        return False
+    if user.get('video_tier') != 'demo' and user.get('audio_tier') != 'demo':
+        return False
+    if not user.get('trial_expires_at'):
+        return False
+    return True
+
+
+def trial_days_remaining(user):
+    """Return int days remaining in trial, or None if not on trial. 0 if expired."""
+    if not is_on_trial(user):
+        return None
+    try:
+        exp = datetime.fromisoformat(user['trial_expires_at'])
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        remaining = (exp - now).total_seconds() / 86400
+        return max(0, int(remaining) + (1 if remaining > 0 else 0))
+    except Exception:
+        return None
+
+
+def is_trial_expired(user):
+    """True if user was on trial and it has ended."""
+    if not user or user.get('video_tier') != 'demo':
+        return False  # Not a demo user, not applicable
+    if not user.get('trial_expires_at'):
+        return False  # No trial ever set
+    try:
+        exp = datetime.fromisoformat(user['trial_expires_at'])
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) > exp
+    except Exception:
+        return False
+
+
+def can_create_session(user):
+    """Return (ok, reason). Enforces demo session limit + trial expiration."""
+    if not user:
+        return False, 'Not logged in.'
+    # Founders / paid tiers: no session limit
+    if user.get('video_tier') != 'demo':
+        return True, None
+    # Demo user: check trial expiry
+    if is_trial_expired(user):
+        return False, 'Your 7-day trial has ended. Please upgrade to continue.'
+    # Demo user: check session count
+    used = user.get('sessions_created_count') or 0
+    if used >= DEMO_SESSION_LIMIT:
+        return False, f'Demo limit reached ({DEMO_SESSION_LIMIT} sessions). Please upgrade to create more.'
+    return True, None
+
+
+def can_publish_video(user, current_month_count):
+    """Return (ok, reason). Enforces trial expiry + monthly cap."""
+    if not user or not user.get('has_clipping'):
+        return False, 'Video subscription required.'
+    if user.get('video_tier') == 'demo' and is_trial_expired(user):
+        return False, 'Your 7-day trial has ended. Please upgrade to continue publishing.'
+    cap = video_cap_for_user(user)
+    if cap and current_month_count >= cap:
+        return False, f'Monthly cap reached ({cap} clips). Upgrade for more.'
+    return True, None
+
+
+def can_publish_audio(user, current_month_count):
+    """Return (ok, reason)."""
+    if not user or not user.get('has_audio'):
+        return False, 'Audio subscription required.'
+    if user.get('audio_tier') == 'demo' and is_trial_expired(user):
+        return False, 'Your 7-day trial has ended. Please upgrade.'
+    cap = audio_cap_for_user(user)
+    if cap and cap < 999999 and current_month_count >= cap:
+        return False, f'Monthly cap reached ({cap} syncs). Upgrade for more.'
+    return True, None

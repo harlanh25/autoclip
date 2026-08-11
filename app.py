@@ -321,6 +321,13 @@ def complete_upload():
     user = autoclip_auth.get_current_user()
     if not user['has_clipping']:
         return jsonify({'error': 'clipping subscription required'}), 403
+
+    # __AUTOCLIP_TRIAL_GATE_V1__
+    # Enforce demo session limit + trial expiration
+    ok, reason = plans.can_create_session(user)
+    if not ok:
+        return jsonify({'error': reason, 'upgrade_url': '/pricing'}), 402  # 402 Payment Required
+
     data = request.get_json() or {}
     session_id = data.get('session_id')
     gcs_key = data.get('gcs_key')
@@ -352,6 +359,18 @@ def complete_upload():
         'clips': []
     }
     save_session(session_id, session)
+
+    # Increment session counter for demo cap tracking
+    try:
+        _db = autoclip_db.get_db()
+        _db.execute(
+            "UPDATE users SET sessions_created_count = COALESCE(sessions_created_count, 0) + 1 WHERE id=?",
+            (user['id'],)
+        )
+        _db.commit()
+    except Exception as _ce:
+        app.logger.warning(f'Failed to bump sessions_created_count for user {user["id"]}: {_ce}')
+
     return jsonify({'session_id': session_id, 'status': 'uploaded'})
 
 
@@ -1454,6 +1473,14 @@ def publish_async_create(session_id):
     """
     import json as _json
     user = autoclip_auth.get_current_user()
+
+    # __AUTOCLIP_TRIAL_GATE_PUBLISH_V1__
+    _db_gate = autoclip_db.get_db()
+    _month_count = plans.video_usage_this_month(_db_gate, user["id"])
+    _ok, _reason = plans.can_publish_video(user, _month_count)
+    if not _ok:
+        return jsonify({"error": _reason, "upgrade_url": "/pricing"}), 402
+
     payload = request.get_json(silent=True) or {}
     segment_index = int(payload.get('segment_index', 0))
 
