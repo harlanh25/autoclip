@@ -31,3 +31,11 @@
 - [ ] Composed intermediate files: already deleted post-upload ✓
 - [ ] Soft-delete on user account deletion, hard-delete after 30 days
 - [ ] Cost dashboard per user (storage GB + compute minutes)
+
+## Trial + subscription UI polish (enhancement)
+- [ ] Global trial banner: show "N days left in trial" on all pages for demo users
+- [ ] Usage progress bar visible on dashboard (not just /account)
+- [ ] Trial-expired screen with prominent upgrade CTA (currently just JSON 402)
+- [ ] Client-side handling of 402 response: show upgrade modal instead of raw error
+- [ ] "Sessions used: 2/3" indicator on session upload form
+- [ ] Auto-set trial_started_at for NEW user signups (currently only grandfathered)
