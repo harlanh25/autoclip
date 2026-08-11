@@ -62,6 +62,57 @@ def _enforce_auth_globally():
             return _jf({'error': 'pending approval'}), 403
         return _rd(_uf('auth.pending_approval'))
 
+
+# __TRIAL_UI_V1__
+TRIAL_GATE_EXEMPT_EXACT = {'/pricing', '/account', '/logout', '/login', '/favicon.ico'}
+TRIAL_GATE_EXEMPT_PREFIX = ('/static/', '/auth/', '/api/admin/')
+
+
+@app.context_processor
+def _inject_trial_context():
+    """Make `trial` available in every template. Never raises."""
+    try:
+        import plans as _plans
+        u = autoclip_auth.get_current_user()
+        if not u:
+            return {'trial': {'authed': False}}
+        try:
+            _db = db.get_db()
+        except Exception:
+            _db = None
+        return {'trial': _plans.usage_context(u, _db)}
+    except Exception:
+        return {'trial': {'authed': False}}
+
+
+@app.before_request
+def _gate_expired_trials():
+    """Hard gate: expired demo users get the upgrade wall."""
+    from flask import request as _rq, jsonify as _jf
+    path = _rq.path
+    if path in PUBLIC_EXACT_PATHS or path in TRIAL_GATE_EXEMPT_EXACT:
+        return
+    if any(path.startswith(p) for p in PUBLIC_PATH_PREFIXES):
+        return
+    if any(path.startswith(p) for p in TRIAL_GATE_EXEMPT_PREFIX):
+        return
+    if path.startswith('/api/publish_jobs/') and path.endswith('/worker_update'):
+        return
+    try:
+        import plans as _plans
+        u = autoclip_auth.get_current_user()
+        if not u or u.get('role') == 'admin':
+            return
+        if not _plans.video_trial_state(u)['expired']:
+            return
+        if path.startswith('/api/'):
+            return _jf({'error': 'Your free trial has ended. Please upgrade to continue.',
+                        'upgrade_url': '/pricing'}), 402
+        return render_template('trial_expired.html'), 402
+    except Exception:
+        return  # never lock anyone out on an internal error
+
+
 # --- End multi-tenant additions ---
 
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10GB max upload

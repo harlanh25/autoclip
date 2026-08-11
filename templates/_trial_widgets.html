@@ -1,0 +1,77 @@
+{# Trial banner + shared 402 upgrade modal. Include once per authed page. #}
+{% if trial and trial.authed %}
+<style>
+  .ac-trial-banner{display:flex;align-items:center;justify-content:center;gap:14px;
+    padding:10px 18px;font:500 14px/1.4 system-ui,-apple-system,sans-serif;
+    background:linear-gradient(90deg,var(--accent,#2563eb),var(--accent-light,#3b82f6));
+    color:#fff;text-align:center;flex-wrap:wrap}
+  .ac-trial-banner.is-urgent{background:linear-gradient(90deg,#b45309,#d97706)}
+  .ac-trial-banner a{color:#fff;font-weight:700;text-decoration:underline;white-space:nowrap}
+  .ac-modal-back{position:fixed;inset:0;background:rgba(3,3,10,.78);backdrop-filter:blur(4px);
+    display:none;align-items:center;justify-content:center;z-index:9999;padding:20px}
+  .ac-modal-back.show{display:flex}
+  .ac-modal{background:var(--bg2,#0e0e1a);border:1px solid var(--border,#1e1e2e);
+    border-radius:16px;max-width:440px;width:100%;padding:30px;
+    color:var(--text,#e8e8f0);font:400 15px/1.55 system-ui,-apple-system,sans-serif;
+    box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .ac-modal h3{margin:0 0 10px;font-size:21px;font-weight:700}
+  .ac-modal p{margin:0 0 22px;color:var(--muted,#6b6b8a)}
+  .ac-modal-actions{display:flex;gap:10px;justify-content:flex-end}
+  .ac-btn{padding:10px 20px;border-radius:9px;font-size:14px;font-weight:600;
+    cursor:pointer;border:1px solid var(--border,#1e1e2e);
+    background:transparent;color:var(--muted,#6b6b8a)}
+  .ac-btn-primary{background:var(--accent,#2563eb);color:#fff;border-color:var(--accent,#2563eb)}
+</style>
+
+{% if trial.show_trial_banner %}
+  {% set _d = trial.video_trial.days_left if trial.video_trial.on_trial else trial.audio_trial.days_left %}
+  <div class="ac-trial-banner {% if _d is not none and _d <= 2 %}is-urgent{% endif %}">
+    <span>
+      {% if _d == 0 %}Your free trial has ended.
+      {% elif _d == 1 %}<strong>1 day</strong> left in your free trial.
+      {% else %}<strong>{{ _d }} days</strong> left in your free trial.{% endif %}
+    </span>
+    <a href="/pricing">Upgrade &rarr;</a>
+  </div>
+{% endif %}
+
+<div class="ac-modal-back" id="acUpgradeModal">
+  <div class="ac-modal">
+    <h3 id="acUpgradeTitle">Upgrade required</h3>
+    <p id="acUpgradeMsg">You&rsquo;ve reached the limit of your current plan.</p>
+    <div class="ac-modal-actions">
+      <button class="ac-btn" onclick="document.getElementById('acUpgradeModal').classList.remove('show')">Not now</button>
+      <a class="ac-btn ac-btn-primary" id="acUpgradeLink" href="/pricing" style="text-decoration:none">See plans</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  if (window.__acUpgradeInit) return;
+  window.__acUpgradeInit = true;
+
+  window.__acShowUpgrade = function(msg, url){
+    var m = document.getElementById('acUpgradeModal');
+    if (!m) return;
+    if (msg) document.getElementById('acUpgradeMsg').textContent = msg;
+    if (url) document.getElementById('acUpgradeLink').href = url;
+    m.classList.add('show');
+  };
+
+  // Catch every 402 app-wide without editing individual fetch call sites.
+  var _f = window.fetch;
+  window.fetch = function(){
+    var p = _f.apply(this, arguments);
+    p.then(function(res){
+      if (res && res.status === 402) {
+        res.clone().json()
+          .then(function(d){ window.__acShowUpgrade(d && d.error, d && d.upgrade_url); })
+          .catch(function(){ window.__acShowUpgrade(); });
+      }
+    }).catch(function(){});
+    return p;
+  };
+})();
+</script>
+{% endif %}

@@ -1,0 +1,36 @@
+{# Usage meters. Include on dashboard / clips pages. #}
+{% if trial and trial.authed %}
+<style>
+  .ac-usage{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0}
+  .ac-usage-card{flex:1;min-width:210px;background:var(--bg3,#14141f);
+    border:1px solid var(--border,#1e1e2e);border-radius:12px;padding:14px 16px;
+    font:400 13px/1.4 system-ui,-apple-system,sans-serif;color:var(--text,#e8e8f0)}
+  .ac-usage-top{display:flex;justify-content:space-between;margin-bottom:9px}
+  .ac-usage-label{color:var(--muted,#6b6b8a);font-weight:600;
+    text-transform:uppercase;letter-spacing:.04em;font-size:11px}
+  .ac-usage-val{font-weight:700}
+  .ac-track{height:6px;background:var(--bg,#07070f);border-radius:99px;overflow:hidden}
+  .ac-fill{height:100%;border-radius:99px;background:var(--accent,#2563eb);transition:width .3s}
+  .ac-fill.warn{background:#d97706}.ac-fill.full{background:#dc2626}
+</style>
+<div class="ac-usage">
+  {% if trial.sessions_cap %}
+  <div class="ac-usage-card">
+    <div class="ac-usage-top">
+      <span class="ac-usage-label">Demo sessions</span>
+      <span class="ac-usage-val">{{ trial.sessions_used }} / {{ trial.sessions_cap }}</span>
+    </div>
+    <div class="ac-track"><div class="ac-fill {% if trial.sessions_pct >= 100 %}full{% elif trial.sessions_pct >= 70 %}warn{% endif %}" style="width:{{ trial.sessions_pct }}%"></div></div>
+  </div>
+  {% endif %}
+  {% if trial.videos_cap and trial.videos_used is not none %}
+  <div class="ac-usage-card">
+    <div class="ac-usage-top">
+      <span class="ac-usage-label">Clips this month</span>
+      <span class="ac-usage-val">{{ trial.videos_used }} / {{ trial.videos_cap }}</span>
+    </div>
+    <div class="ac-track"><div class="ac-fill {% if trial.videos_pct >= 100 %}full{% elif trial.videos_pct >= 70 %}warn{% endif %}" style="width:{{ trial.videos_pct }}%"></div></div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
