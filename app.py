@@ -584,8 +584,40 @@ def get_local_video_path(session):
         local = str(UPLOAD_DIR / f"{session['id']}{ext}")
         if not Path(local).exists():
             gcs_helper.download_file(session['gcs_key'], local)
+        _sweep_uploads_dir()  # opportunistic LRU sweep
         return local
     return session['video_path']
+
+
+# __AUTOCLIP_UPLOADS_SWEEP_V42__
+def _sweep_uploads_dir(max_age_hours=1, min_free_gb=2.0):
+    """Delete files in UPLOAD_DIR older than max_age_hours.
+
+    Also does an emergency sweep (delete ANY files) if disk free is under min_free_gb.
+    Silent — never raises. Runs on every session-video-fetch.
+    """
+    import time
+    import shutil as _sh
+    try:
+        cutoff = time.time() - (max_age_hours * 3600)
+        # Emergency mode: if free space is critical, be more aggressive
+        try:
+            free_gb = _sh.disk_usage(str(UPLOAD_DIR)).free / (1024 ** 3)
+        except Exception:
+            free_gb = 999.0
+        emergency = free_gb < min_free_gb
+        for f in Path(UPLOAD_DIR).iterdir():
+            if not f.is_file():
+                continue
+            try:
+                mtime = f.stat().st_mtime
+                if emergency or mtime < cutoff:
+                    f.unlink()
+                    app.logger.info(f'uploads sweep: removed {f.name} (age={int((time.time()-mtime)/60)}min emergency={emergency})')
+            except Exception as _e:
+                app.logger.warning(f'uploads sweep: failed to remove {f.name}: {_e}')
+    except Exception as _e:
+        app.logger.warning(f'uploads sweep failed: {_e}')
 
 @app.route('/api/clip/<session_id>', methods=['POST'])
 def create_clip(session_id):
