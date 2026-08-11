@@ -1,0 +1,60 @@
+{# Shared top nav. Include on every authed page. Pass active="dashboard" etc. #}
+<style>
+  nav.ac-nav { background: rgba(7,7,15,0.85); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border, #1e1e2e); padding: 0 2rem; display: flex;
+    align-items: center; justify-content: space-between; height: 60px;
+    position: sticky; top: 0; z-index: 100; }
+  nav.ac-nav .nav-left { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+  nav.ac-nav .brand { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; }
+  nav.ac-nav .brand img { height: 28px; width: 28px; }
+  nav.ac-nav .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
+    color: var(--text, #e8e8f0); }
+  nav.ac-nav .brand-text .accent { color: var(--accent-light, #3b82f6); }
+  nav.ac-nav a { color: var(--muted, #6b6b8a); text-decoration: none; font-size: 0.875rem;
+    font-weight: 500; white-space: nowrap; }
+  nav.ac-nav a:hover { color: var(--text, #e8e8f0); }
+  nav.ac-nav a.active { color: var(--text, #e8e8f0); }
+  nav.ac-nav a.locked { opacity: 0.55; }
+  nav.ac-nav a.locked::after { content: ' 🔒'; font-size: 0.7rem; }
+  nav.ac-nav .nav-user { display: flex; align-items: center; gap: 0.75rem;
+    color: var(--muted, #6b6b8a); font-size: 0.85rem; }
+  nav.ac-nav .nav-user img { height: 28px; width: 28px; border-radius: 50%; }
+  nav.ac-nav .logout-link { font-size: 0.8rem; }
+  @media (max-width: 900px) {
+    nav.ac-nav { height: auto; padding: 0.6rem 1rem; flex-wrap: wrap; gap: 0.5rem; }
+    nav.ac-nav .nav-left { gap: 1rem; }
+  }
+</style>
+
+{% set _has_video = current_user and (current_user.has_clipping or current_user.video_tier not in (None, 'demo')) %}
+{% set _has_audio = current_user and (current_user.has_audio or current_user.audio_tier not in (None, 'demo')) %}
+
+<nav class="ac-nav">
+  <div class="nav-left">
+    <a href="/" class="brand">
+      <img src="/static/img/autoclip_mark.png" alt="AutoClip">
+      <span class="brand-text">Auto<span class="accent">Clip</span></span>
+    </a>
+    <a href="/dashboard" class="{% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
+    <a href="/sessions" class="{% if active == 'sessions' %}active{% endif %}">My Sessions</a>
+    <a href="/channels" class="{% if active == 'channels' %}active{% endif %}">Channels</a>
+    <a href="/audio" class="{% if active == 'audio' %}active{% endif %}{% if not _has_audio %} locked{% endif %}"
+       {% if not _has_audio %}title="Audio Sync requires a subscription"{% endif %}>Audio</a>
+    <a href="/ads" class="{% if active == 'ads' %}active{% endif %}">Ad Library</a>
+    <a href="/thumbnails" class="{% if active == 'thumbnails' %}active{% endif %}">Thumbnails</a>
+    <a href="/pricing" class="{% if active == 'pricing' %}active{% endif %}">Pricing</a>
+    {% if current_user and current_user.role == 'admin' %}
+    <a href="/admin/users" class="{% if active == 'admin' %}active{% endif %}">Admin</a>
+    {% endif %}
+  </div>
+  <div class="nav-user">
+    {% if current_user %}
+      {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
+      <span>{{ current_user.name or current_user.email }}</span>
+      <a href="/account">Account</a>
+      <a href="/logout" class="logout-link">(sign out)</a>
+    {% else %}
+      <a href="/login">Sign in</a>
+    {% endif %}
+  </div>
+</nav>

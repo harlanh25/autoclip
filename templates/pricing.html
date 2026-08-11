@@ -134,34 +134,8 @@
 </head>
 <body>
 
-<nav>
-  <div class="nav-left">
-    <a href="/" class="brand">
-      <img src="/static/img/autoclip_mark.png" alt="AutoClip">
-      <span class="brand-text">Auto<span class="accent">Clip</span></span>
-    </a>
-    {% if current_user %}
-      <a href="/dashboard">Dashboard</a>
-      <a href="/sessions">My Sessions</a>
-      <a href="/channels">Channels</a>
-      <a href="/audio">Audio</a>
-      <a href="/ads">Ad Library</a>
-      <a href="/thumbnails">Thumbnails</a>
-      {% if current_user.role == 'admin' %}<a href="/admin/users">Admin</a>{% endif %}
-    {% endif %}
-    <a href="/pricing" class="active">Pricing</a>
-  </div>
-  <div class="nav-user">
-    {% if current_user %}
-      {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
-      <span>{{ current_user.name or current_user.email }}</span>
-      <a href="/account" style="color: var(--muted); font-size: 0.85rem;">Account</a>
-      <a href="/logout" class="logout-link">(sign out)</a>
-    {% else %}
-      <a href="/login" style="color: var(--accent); font-weight: 600;">Sign in</a>
-    {% endif %}
-  </div>
-</nav>
+{% set active = 'pricing' %}
+{% include '_nav.html' with context %}
 
 <main>
   <div class="page-header">
