@@ -1113,11 +1113,19 @@ def _finish_publish_job(job_id):
 
             yt = googleapiclient.discovery.build('youtube', 'v3', credentials=creds)
 
-            title = payload.get('title') or segment.get('title') or 'Untitled'
-            description = payload.get('description') or segment.get('description') or ''
-            privacy = payload.get('privacy', job.get('privacy') or 'private')
-            tags = payload.get('tags') or []
-            category_id = str(payload.get('category_id') or 22)
+            # __AUTOCLIP_FINISHER_FULL_YT_V42__
+            # Pull the rich YT settings the frontend saved on the segment
+            _yt = segment.get('youtube', {}) or {}
+
+            title = payload.get('title') or _yt.get('title') or segment.get('title') or 'Untitled'
+            description = payload.get('description') or _yt.get('description') or segment.get('description') or ''
+            privacy = payload.get('privacy') or _yt.get('privacy') or job.get('privacy') or 'private'
+            tags = payload.get('tags') or _yt.get('tags') or []
+            category_id = str(payload.get('category_id') or _yt.get('category_id') or 22)
+            made_for_kids = bool(_yt.get('made_for_kids', False))
+            monetize = bool(_yt.get('monetize', False))
+            publish_at = _yt.get('publish_at')  # ISO-8601 string like "2025-08-15T12:00:00Z"
+            _playlist_ids_final = _yt.get('playlist_ids') or []
 
             body = {
                 'snippet': {
@@ -1128,9 +1136,17 @@ def _finish_publish_job(job_id):
                 },
                 'status': {
                     'privacyStatus': privacy,
-                    'selfDeclaredMadeForKids': False,
+                    'selfDeclaredMadeForKids': made_for_kids,
                 }
             }
+            # Scheduled publish: only meaningful when video is Private and publish_at is set
+            if publish_at and privacy == 'private':
+                body['status']['publishAt'] = publish_at
+            # Monetization opt-in (channel must be in YPP for this to actually apply)
+            if monetize:
+                body['monetizationDetails'] = {
+                    'access': {'allowed': True}
+                }
 
             media = MediaFileUpload(local_composed, mimetype='video/mp4', resumable=True, chunksize=8*1024*1024)
             req = yt.videos().insert(part='snippet,status', body=body, media_body=media)
@@ -1162,6 +1178,26 @@ def _finish_publish_job(job_id):
                 "WHERE id=?", (video_id, job_id))
             db.commit()
             app.logger.info(f'Finisher: job {job_id} done, video_id={video_id}')
+
+            # Add to playlists (best-effort, ignore failures)
+            if _playlist_ids_final:
+                for _pid in _playlist_ids_final:
+                    try:
+                        yt.playlistItems().insert(
+                            part='snippet',
+                            body={
+                                'snippet': {
+                                    'playlistId': _pid,
+                                    'resourceId': {
+                                        'kind': 'youtube#video',
+                                        'videoId': video_id,
+                                    }
+                                }
+                            }
+                        ).execute()
+                        app.logger.info(f'Added job {job_id} video {video_id} to playlist {_pid}')
+                    except Exception as _pe:
+                        app.logger.warning(f'Failed to add to playlist {_pid}: {_pe}')
 
             # Cleanup GCS temp composed
             try:
