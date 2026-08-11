@@ -2696,8 +2696,10 @@ def compose_youtube_description(session, segment, ai_text=None, channel_row=None
     ai = (ai_text if ai_text is not None else segment.get('description')) or ''
     ai = ai.strip()
 
-    # Ads part: intro, mid, outro in that order, de-duplicated
-    ad_ids = [segment.get('intro_ad_id'), segment.get('mid_ad_id'), segment.get('outro_ad_id')]
+    # Ads part: the segment's explicitly-chosen description ads.
+    # Deliberately NOT intro/mid/outro - video placement and description
+    # blurbs are independent choices.
+    ad_ids = list(segment.get('description_ad_ids') or [])
     ad_texts, seen = [], set()
     for aid in ad_ids:
         if not aid or aid in seen:
@@ -3726,7 +3728,10 @@ def save_segment_ads(session_id, segment_index):
       {"intro_ad_id": int|null,
        "outro_ad_id": int|null,
        "mid_ad_id": int|null,
-       "mid_ad_position_sec": float|null}    (null = AI auto-places mid ad)
+       "mid_ad_2_id": int|null,
+       "mid_ad_position_sec": float|null,     (null = AI auto-places)
+       "mid_ad_2_position_sec": float|null,
+       "description_ad_ids": [int, ...]}      (independent of video placement)
 
     Only keys present in the body are updated; omitted keys are untouched.
     Each ad_id must belong to the same channel as the session.
@@ -3766,25 +3771,41 @@ def save_segment_ads(session_id, segment_index):
         return (ad_id, None)
 
     updates = {}
-    for key in ('intro_ad_id', 'outro_ad_id', 'mid_ad_id'):
+    for key in ('intro_ad_id', 'outro_ad_id', 'mid_ad_id', 'mid_ad_2_id'):
         if key in payload:
             val, err = _validate_ad(payload[key])
             if err:
                 return jsonify({'error': f'{key}: {err}'}), 400
             updates[key] = val
 
-    if 'mid_ad_position_sec' in payload:
-        raw = payload['mid_ad_position_sec']
-        if raw is None or (isinstance(raw, str) and raw.strip() == ''):
-            updates['mid_ad_position_sec'] = None
-        else:
-            try:
-                pos = float(raw)
-                if pos < 0:
-                    return jsonify({'error': 'mid_ad_position_sec must be >= 0'}), 400
-                updates['mid_ad_position_sec'] = pos
-            except (TypeError, ValueError):
-                return jsonify({'error': 'mid_ad_position_sec must be a number'}), 400
+    for pkey in ('mid_ad_position_sec', 'mid_ad_2_position_sec'):
+        if pkey in payload:
+            raw = payload[pkey]
+            if raw is None or (isinstance(raw, str) and raw.strip() == ''):
+                updates[pkey] = None
+            else:
+                try:
+                    pos = float(raw)
+                    if pos < 0:
+                        return jsonify({'error': f'{pkey} must be >= 0'}), 400
+                    updates[pkey] = pos
+                except (TypeError, ValueError):
+                    return jsonify({'error': f'{pkey} must be a number'}), 400
+
+    # Description ads are INDEPENDENT of video ad placement. This is the list
+    # whose description_text gets appended to the YouTube description.
+    if 'description_ad_ids' in payload:
+        raw = payload['description_ad_ids'] or []
+        if not isinstance(raw, list):
+            return jsonify({'error': 'description_ad_ids must be a list'}), 400
+        clean = []
+        for aid in raw:
+            val, err = _validate_ad(aid)
+            if err:
+                return jsonify({'error': f'description_ad_ids: {err}'}), 400
+            if val is not None and val not in clean:
+                clean.append(val)
+        updates['description_ad_ids'] = clean
 
     segment = session['segments'][segment_index]
     for k, v in updates.items():

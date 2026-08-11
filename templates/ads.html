@@ -70,6 +70,25 @@
   .inline-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent-light); padding: 0.55rem 0.9rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; font-family: inherit; margin-left: 0.5rem; }
   .inline-btn:hover { background: rgba(37,99,235,0.1); }
   .fetch-status { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
+  .desc-cell { max-width: 320px; }
+  .desc-view {
+    cursor: pointer; font-size: .8rem; line-height: 1.4; color: var(--text, #e8e8f0);
+    white-space: pre-wrap; max-height: 4.2em; overflow: hidden; border-radius: 4px;
+    padding: 2px 4px;
+  }
+  .desc-view:hover { background: rgba(255,255,255,.04); }
+  .desc-empty { color: var(--muted, #888); font-style: italic; }
+  .desc-edit textarea {
+    width: 100%; background: var(--bg, #0a0a0f); color: var(--text, #e8e8f0);
+    border: 1px solid var(--accent, #2563eb); border-radius: 6px; padding: .5rem;
+    font-size: .8rem; font-family: inherit; resize: vertical;
+  }
+  .desc-actions { display: flex; gap: .4rem; margin-top: .35rem; }
+  .desc-save, .desc-cancel {
+    font-size: .75rem; padding: .3rem .7rem; border-radius: 5px; cursor: pointer;
+    border: 1px solid var(--border, #222); background: transparent; color: var(--muted, #888);
+  }
+  .desc-save { background: var(--accent, #2563eb); border-color: var(--accent, #2563eb); color: #fff; }
 </style>
 </head>
 <body>
@@ -218,7 +237,7 @@
       return;
     }
     CONTAINER.innerHTML = `<table class="ads-table"><thead><tr>
-      <th>Ad</th><th>Duration</th><th>Size</th><th>Role</th><th class="actions">Actions</th>
+      <th>Ad</th><th>Duration</th><th>Size</th><th>Role</th><th>Description text</th><th class="actions">Actions</th>
     </tr></thead><tbody>` +
       ads.map(a => `
         <tr data-id="${a.id}">
@@ -230,6 +249,17 @@
             <button class="role-btn ${a.role==='outro'?'active':''}" onclick="window.__setRole(${a.id}, 'outro')">Outro</button>
             <button class="role-btn ${a.role==='none'?'active':''}" onclick="window.__setRole(${a.id}, 'none')">None</button>
           </td>
+          <td class="desc-cell">
+            <div id="descview-${a.id}" class="desc-view" onclick="window.__editDesc(${a.id})"
+                 title="Click to edit">${a.description_text ? esc(a.description_text) : '<span class=\'desc-empty\'>+ Add description text</span>'}</div>
+            <div id="descedit-${a.id}" class="desc-edit" style="display:none;">
+              <textarea id="descbox-${a.id}" rows="4" placeholder="Text added to the YouTube description whenever this ad is selected on a segment.">${esc(a.description_text || '')}</textarea>
+              <div class="desc-actions">
+                <button class="desc-save" onclick="window.__saveDesc(${a.id})">Save</button>
+                <button class="desc-cancel" onclick="window.__cancelDesc(${a.id})">Cancel</button>
+              </div>
+            </div>
+          </td>
           <td class="actions">
             <button onclick="window.__playAd(${a.id}, '${esc(a.display_url || '')}')">▶</button>
             <a href="/api/ads/library/${a.id}/download">⬇</a>
@@ -240,6 +270,31 @@
       '</tbody></table>';
   }
 
+  window.__editDesc = function(id) {
+    document.getElementById('descview-' + id).style.display = 'none';
+    document.getElementById('descedit-' + id).style.display = 'block';
+    document.getElementById('descbox-' + id).focus();
+  };
+  window.__cancelDesc = function(id) {
+    document.getElementById('descedit-' + id).style.display = 'none';
+    document.getElementById('descview-' + id).style.display = 'block';
+  };
+  window.__saveDesc = async function(id) {
+    const box = document.getElementById('descbox-' + id);
+    const text = box.value;
+    if (text.length > 2000) { alert('Max 2000 characters.'); return; }
+    try {
+      const r = await fetch(`/api/ads/library/${id}/description`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({description_text: text})
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      fetchAds();
+    } catch (e) {
+      alert('Failed to save description: ' + (e.message || e));
+    }
+  };
   window.__setRole = async function(id, role) {
     try {
       const r = await fetch(`/api/ads/library/${id}/set_role`, {

@@ -291,8 +291,34 @@
                   <input type="text" id="mid-ad-pos-{{ idx }}" placeholder="auto" value="{{ seg.mid_ad_position_sec or '' }}" data-segment="{{ idx }}" onblur="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
                 </div>
               </div>
+              <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 130px;gap:.5rem;align-items:end;">
+                <div>
+                  <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">Mid-clip #2 (optional)</div>
+                  <select class="ad-select" id="mid-ad-2-{{ idx }}" data-segment="{{ idx }}" data-role="mid2" data-current="{{ seg.mid_ad_2_id or '' }}" onchange="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+                    <option value="">Loading…</option>
+                  </select>
+                </div>
+                <div>
+                  <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">At (sec)</div>
+                  <input type="text" id="mid-ad-2-pos-{{ idx }}" placeholder="auto" value="{{ seg.mid_ad_2_position_sec or '' }}" data-segment="{{ idx }}" onblur="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+                </div>
+              </div>
             </div>
             <div class="status" id="ads-status-{{ idx }}" style="font-size:.72rem;color:var(--muted);margin-top:.4rem;min-height:1em;"></div>
+          </div>
+
+          <div class="field">
+            <div class="field-label">
+              <span class="label">Ads in Description</span>
+            </div>
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:.4rem;">
+              Independent of the slots above — check any sponsors whose text should appear in the YouTube description.
+            </div>
+            <div class="yt-checkboxes" id="desc-ads-{{ idx }}" data-segment="{{ idx }}"
+                 data-selected="{{ (seg.description_ad_ids or []) | join(',') }}"
+                 style="max-height:150px;overflow-y:auto;">
+              <div style="color:var(--muted);font-size:.8rem;">Loading…</div>
+            </div>
           </div>
         </div>
 
@@ -428,7 +454,6 @@
           </select>
         </div>
         <div style="display: flex; gap: 0.5rem;">
-          <button class="btn btn-secondary btn-sm" onclick="insertAd({{ idx }})">➕ Insert Ad</button>
           <button class="btn btn-primary" onclick="publishAsync({{ idx }})">🚀 Publish to YouTube</button>
         </div>
       </div>
@@ -940,6 +965,8 @@
     const outro = document.getElementById(`outro-ad-${idx}`);
     const mid   = document.getElementById(`mid-ad-${idx}`);
     const pos   = document.getElementById(`mid-ad-pos-${idx}`);
+    const mid2  = document.getElementById(`mid-ad-2-${idx}`);
+    const pos2  = document.getElementById(`mid-ad-2-pos-${idx}`);
     const status = document.getElementById(`ads-status-${idx}`);
 
     const parseId = (v) => (v === '' || v == null) ? null : parseInt(v, 10);
@@ -952,7 +979,12 @@
       intro_ad_id: parseId(intro.value),
       outro_ad_id: parseId(outro.value),
       mid_ad_id:   parseId(mid.value),
-      mid_ad_position_sec: parsePos(pos.value)
+      mid_ad_position_sec: parsePos(pos.value),
+      mid_ad_2_id: mid2 ? parseId(mid2.value) : null,
+      mid_ad_2_position_sec: pos2 ? parsePos(pos2.value) : null,
+      description_ad_ids: Array.from(
+        document.querySelectorAll(`#desc-ads-${idx} input[type="checkbox"]:checked`)
+      ).map(cb => parseInt(cb.value, 10))
     };
 
     status.textContent = 'Saving…';
@@ -971,6 +1003,7 @@
       intro.dataset.current = String(body.intro_ad_id || '');
       outro.dataset.current = String(body.outro_ad_id || '');
       mid.dataset.current = String(body.mid_ad_id || '');
+      if (mid2) mid2.dataset.current = String(body.mid_ad_2_id || '');
       status.textContent = '✓ saved';
       status.style.color = 'var(--muted)';
       setTimeout(() => { if (status.textContent === '✓ saved') status.textContent = ''; }, 1500);
@@ -980,7 +1013,57 @@
     }
   };
 
+  // Description-ads checklist: only ads that actually have description text
+  async function renderDescAdChecklists() {
+    const boxes = document.querySelectorAll('[id^="desc-ads-"]');
+    if (!boxes.length) return;
+    const channelPk = {{ session.channel_id or 'null' }};
+    if (!channelPk) {
+      boxes.forEach(b => b.innerHTML = '<div style="color:var(--muted);font-size:.8rem;">No channel on this session.</div>');
+      return;
+    }
+    let ads = [];
+    try {
+      const r = await fetch('/api/ads/library?channel_id=' + channelPk);
+      const j = await r.json();
+      ads = j.ads || [];
+    } catch (e) {
+      boxes.forEach(b => b.innerHTML = '<div style="color:#f66;font-size:.8rem;">Failed to load ads.</div>');
+      return;
+    }
+    const withText = ads.filter(a => (a.description_text || '').trim() !== '');
+    const hiddenCount = ads.length - withText.length;
+
+    boxes.forEach(box => {
+      const idx = box.dataset.segment;
+      const selected = (box.dataset.selected || '')
+        .split(',').map(x => x.trim()).filter(Boolean).map(Number);
+      if (!withText.length) {
+        box.innerHTML = '<div style="color:var(--muted);font-size:.8rem;">'
+          + 'No ads have description text yet. Add it in the '
+          + '<a href="/ads" style="color:var(--accent);">Ad Library</a>.</div>';
+        return;
+      }
+      box.innerHTML = withText.map(a => {
+        const checked = selected.includes(a.id) ? 'checked' : '';
+        const preview = (a.description_text || '').slice(0, 70).replace(/</g, '&lt;');
+        return `<label style="display:flex;gap:.5rem;align-items:flex-start;padding:.3rem 0;cursor:pointer;">
+          <input type="checkbox" value="${a.id}" ${checked}
+                 onchange="window.__saveSegmentAds(${idx})" style="margin-top:.2rem;">
+          <span style="font-size:.8rem;line-height:1.3;">
+            <strong>${(a.display_name || '').replace(/</g,'&lt;')}</strong>
+            <br><span style="color:var(--muted);font-size:.72rem;">${preview}${(a.description_text||'').length > 70 ? '…' : ''}</span>
+          </span>
+        </label>`;
+      }).join('')
+      + (hiddenCount > 0
+          ? `<div style="color:var(--muted);font-size:.7rem;margin-top:.4rem;border-top:1px solid var(--border);padding-top:.4rem;">${hiddenCount} other ad(s) hidden — no description text set.</div>`
+          : '');
+    });
+  }
+
   loadAdsAndPopulate();
+  renderDescAdChecklists();
 })();
 </script>
 
