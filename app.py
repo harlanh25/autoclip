@@ -52,6 +52,9 @@ def _enforce_auth_globally():
     # Worker callbacks use X-Worker-Secret auth, not session cookies
     if path.startswith('/api/publish_jobs/') and path.endswith('/worker_update'):
         return
+    # Stripe webhooks come from Stripe's servers - authenticated by signature
+    if path == '/api/stripe/webhook':
+        return
     user = autoclip_auth.get_current_user()
     if not user:
         if path.startswith('/api/'):
@@ -65,7 +68,7 @@ def _enforce_auth_globally():
 
 # __TRIAL_UI_V1__
 TRIAL_GATE_EXEMPT_EXACT = {'/pricing', '/account', '/logout', '/login', '/favicon.ico'}
-TRIAL_GATE_EXEMPT_PREFIX = ('/static/', '/auth/', '/api/admin/')
+TRIAL_GATE_EXEMPT_PREFIX = ('/static/', '/auth/', '/api/admin/', '/api/stripe/', '/api/checkout/', '/api/billing_portal')
 
 
 @app.context_processor
@@ -112,6 +115,15 @@ def _gate_expired_trials():
     except Exception:
         return  # never lock anyone out on an internal error
 
+
+
+# __STRIPE_BP__
+try:
+    import stripe_integration
+    app.register_blueprint(stripe_integration.bp)
+    app.logger.info('stripe blueprint registered')
+except Exception as _e:
+    app.logger.error('stripe blueprint NOT registered: %s', _e)
 
 # --- End multi-tenant additions ---
 
