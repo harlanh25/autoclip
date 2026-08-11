@@ -2651,6 +2651,44 @@ def _fetch_channel_recent_content(youtube_channel_id, max_results=15):
         return [], []
 
 
+
+# __SEGMENT_TRANSCRIPT_V1__
+def segment_transcript_text(session, segment, max_chars=3000):
+    """
+    Return the transcript text spoken inside a segment's time window.
+
+    Segments do NOT carry their own 'transcript' key - the transcript lives
+    at the session root as a list of {start, end, text} lines. Every AI
+    prompt used to read segment.get('transcript') and silently get '',
+    so titles/descriptions were generated with no knowledge of the clip.
+    """
+    lines = session.get('transcript') or []
+    if not lines:
+        return (session.get('full_text') or '')[:max_chars]
+
+    start = float(segment.get('start_time') or segment.get('start') or 0)
+    end = float(segment.get('end_time') or segment.get('end') or 0)
+    if end <= start:
+        return (session.get('full_text') or '')[:max_chars]
+
+    out = []
+    for ln in lines:
+        try:
+            ls = float(ln.get('start', 0))
+            le = float(ln.get('end', ls))
+        except (TypeError, ValueError):
+            continue
+        # any overlap with the window
+        if le >= start and ls <= end:
+            t = (ln.get('text') or '').strip()
+            if t:
+                out.append(t)
+    text = " ".join(out).strip()
+    if not text:
+        return (session.get('full_text') or '')[:max_chars]
+    return text[:max_chars]
+
+
 @app.route('/api/regenerate_title/<session_id>', methods=['POST'])
 def regenerate_title(session_id):
     """Generate 3 alternate title options for a segment, matching channel style."""
@@ -2666,7 +2704,7 @@ def regenerate_title(session_id):
     titles, _ = _fetch_channel_recent_content(channel_yt_id) if channel_yt_id else ([], [])
 
     # Build the prompt
-    transcript_snippet = segment.get('transcript', '')[:2000]
+    transcript_snippet = segment_transcript_text(session, segment, 2000)
     style_examples = "\n".join(f"- {t}" for t in titles[:10]) if titles else "(no examples available)"
 
     prompt = f"""Generate 3 YouTube video title options for this clip segment.
@@ -2719,7 +2757,7 @@ def regenerate_description(session_id):
     channel_yt_id = session.get('channel_youtube_id')
     _, descs = _fetch_channel_recent_content(channel_yt_id) if channel_yt_id else ([], [])
 
-    transcript_snippet = segment.get('transcript', '')[:3000]
+    transcript_snippet = segment_transcript_text(session, segment, 3000)
     style_examples = "\n---\n".join(descs[:5]) if descs else "(no examples available)"
 
     prompt = f"""Generate 3 YouTube video description options for this clip segment.
@@ -2963,7 +3001,7 @@ def execute_all(session_id):
         # -- 2. Title if missing --
         if not segment.get('title'):
             try:
-                transcript_snippet = (segment.get('transcript') or '')[:2000]
+                transcript_snippet = segment_transcript_text(session, segment, 2000)
                 prompt = (
                     "Generate a single YouTube video title for this clip segment.\n\n"
                     "Match the style of these recent titles from the same channel:\n"
@@ -2988,7 +3026,7 @@ def execute_all(session_id):
         # -- 3. Description if missing --
         if not segment.get('description'):
             try:
-                transcript_snippet = (segment.get('transcript') or '')[:3000]
+                transcript_snippet = segment_transcript_text(session, segment, 3000)
                 prompt = (
                     "Generate a YouTube video description (2-3 sentences) for this clip segment.\n\n"
                     "Match the style, length, and formatting of these recent descriptions from the same channel:\n"
