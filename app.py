@@ -172,7 +172,7 @@ def list_sessions():
     # Sort by mtime desc (most recent first)
     rows.sort(key=lambda r: r['mtime'], reverse=True)
 
-    return render_template('sessions.html', sessions=rows, user=user)
+    return render_template('sessions.html', sessions=rows, current_user=user)
 
 
 @app.route('/studio/<session_id>')
