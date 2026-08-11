@@ -96,12 +96,13 @@
     <h2>💳 Subscriptions</h2>
     <div class="sub-line">
       <div class="info">
-        <span class="name">Clipping</span>
+        <span class="name">Video (Clipping) — <span style="color: var(--accent-light);">{{ plan.video_tier_name }}</span></span>
         <span class="status">
           {% if current_user.has_clipping %}
-            Monthly cap: {% if current_user.clipping_monthly_cap %}{{ current_user.clipping_monthly_cap }} shows{% else %}Unlimited{% endif %}
+            {% if plan.video_price %}${{ '%.2f'|format(plan.video_price) }}/mo · {% endif %}
+            {{ plan.video_cap }} clips/mo
           {% else %}
-            Not subscribed
+            Not subscribed · <a href="/pricing" style="color: var(--accent-light);">See plans →</a>
           {% endif %}
         </span>
       </div>
@@ -113,12 +114,13 @@
     </div>
     <div class="sub-line">
       <div class="info">
-        <span class="name">Audio Sync</span>
+        <span class="name">Audio (Podcast Sync) — <span style="color: var(--accent-light);">{{ plan.audio_tier_name }}</span></span>
         <span class="status">
           {% if current_user.has_audio %}
-            Monthly cap: {% if current_user.audio_monthly_cap %}{{ current_user.audio_monthly_cap }} episodes{% else %}Unlimited{% endif %}
+            {% if plan.audio_price %}${{ '%.2f'|format(plan.audio_price) }}/mo · {% endif %}
+            {{ plan.audio_cap }} syncs/mo
           {% else %}
-            Not subscribed
+            Not subscribed · <a href="/pricing" style="color: var(--accent-light);">See plans →</a>
           {% endif %}
         </span>
       </div>
@@ -127,6 +129,16 @@
       {% else %}
         <span class="badge badge-off">Off</span>
       {% endif %}
+    </div>
+    <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+      <div style="color: var(--muted); font-size: 0.85rem;">
+        {% if plan.is_bundle %}
+          On the Bundle — save more when you use both products.
+        {% else %}
+          Want more capacity or the bundle discount?
+        {% endif %}
+      </div>
+      <a href="/pricing" style="background: var(--accent); color: white; padding: 0.55rem 1.1rem; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.9rem;">View plans & upgrade →</a>
     </div>
   </div>
 

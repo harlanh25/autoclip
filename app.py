@@ -14,6 +14,7 @@ import re
 import gcs_storage
 import tempfile
 import gcs_helper
+import plans
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, url_for
 from openai import OpenAI
 from googleapiclient.discovery import build
@@ -38,7 +39,7 @@ app.register_blueprint(autoclip_auth.bp)
 
 
 PUBLIC_PATH_PREFIXES = ('/static/', '/login', '/logout', '/auth/', '/pending-approval')
-PUBLIC_EXACT_PATHS = {'/'}
+PUBLIC_EXACT_PATHS = {'/', '/pricing'}
 
 @app.before_request
 def _enforce_auth_globally():
@@ -2293,6 +2294,20 @@ def _check_clipping_cap(user):
 # Account / usage routes
 # ============================================================================
 
+@app.route('/pricing')
+def pricing_page():
+    """Public pricing page. Shows tiers for video, audio, and bundles."""
+    user = autoclip_auth.get_current_user()
+    return render_template(
+        'pricing.html',
+        current_user=user,
+        video_tiers=plans.VIDEO_TIERS,
+        audio_tiers=plans.AUDIO_TIERS,
+        bundle_tiers=plans.BUNDLE_TIERS,
+        plan=plans.user_plan_summary(user) if user else {},
+    )
+
+
 @app.route('/account')
 def account_page():
     """Show current user their subscription and usage."""
@@ -2307,6 +2322,7 @@ def account_page():
         usage=usage,
         period=_current_period(),
         audio_config_count=audio_config_count,
+        plan=plans.user_plan_summary(user),
     )
 
 
