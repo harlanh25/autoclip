@@ -39,3 +39,14 @@
 - [ ] Client-side handling of 402 response: show upgrade modal instead of raw error
 - [ ] "Sessions used: 2/3" indicator on session upload form
 - [ ] Auto-set trial_started_at for NEW user signups (currently only grandfathered)
+
+## Bundle handling (address at Stripe integration)
+Right now bundles work by having video_tier == audio_tier (both non-demo). The pricing page displays bundle prices ($59.99/$99.99/$159.99), but caps and DB records are set separately per product.
+
+When Stripe integration lands:
+- [ ] Create dedicated Stripe products for each bundle tier (not two separate subscriptions)
+- [ ] Admin UI needs one-click "Set to Bundle T1/T2/T3" that sets both video + audio tiers atomically
+- [ ] Bundle upgrade/downgrade flow: transitioning from separate subscriptions to a bundle (or vice versa) needs a subscription swap in Stripe
+- [ ] Bundle indicator badge in admin panel (small 🎁 Bundle tag when both tiers match and non-demo)
+- [ ] Handle mid-cycle changes: if user upgrades video only, are they still on bundle or split?
+- [ ] Emails/notifications should reflect "You're on Bundle Pro" not "You have Video Pro + Audio Pro"
