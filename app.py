@@ -154,11 +154,11 @@ def list_sessions():
         chan_name = '(no channel)'
         if chan_yt_id:
             _cr = db.execute(
-                "SELECT display_name FROM channels WHERE youtube_channel_id=?",
+                "SELECT title FROM channels WHERE youtube_channel_id=?",
                 (chan_yt_id,)
             ).fetchone()
             if _cr:
-                chan_name = _cr['display_name']
+                chan_name = _cr['title']
 
         rows.append({
             'id': s.get('id'),
