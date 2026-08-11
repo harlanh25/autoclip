@@ -291,17 +291,14 @@
                   <input type="text" id="mid-ad-pos-{{ idx }}" placeholder="auto" value="{{ seg.mid_ad_position_sec or '' }}" data-segment="{{ idx }}" onblur="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
                 </div>
               </div>
-              <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 130px;gap:.5rem;align-items:end;">
-                <div>
-                  <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">Mid-clip #2 (optional)</div>
-                  <select class="ad-select" id="mid-ad-2-{{ idx }}" data-segment="{{ idx }}" data-role="mid2" data-current="{{ seg.mid_ad_2_id or '' }}" onchange="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
-                    <option value="">Loading…</option>
-                  </select>
-                </div>
-                <div>
-                  <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">At (sec)</div>
-                  <input type="text" id="mid-ad-2-pos-{{ idx }}" placeholder="auto" value="{{ seg.mid_ad_2_position_sec or '' }}" data-segment="{{ idx }}" onblur="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
-                </div>
+              <div style="grid-column:1/-1;" id="extra-mids-{{ idx }}"
+                   data-segment="{{ idx }}"
+                   data-ids="{{ (seg.extra_mid_ad_ids or []) | join(',') }}"
+                   data-positions="{{ (seg.extra_mid_positions or []) | map('default','') | join(',') }}"></div>
+              <div style="grid-column:1/-1;">
+                <button type="button" class="btn btn-secondary btn-sm" id="add-mid-btn-{{ idx }}"
+                        onclick="window.__addMidRow({{ idx }})"
+                        style="font-size:.75rem;padding:.35rem .8rem;">+ Add mid-roll ad</button>
               </div>
             </div>
             <div class="status" id="ads-status-{{ idx }}" style="font-size:.72rem;color:var(--muted);margin-top:.4rem;min-height:1em;"></div>
@@ -965,8 +962,6 @@
     const outro = document.getElementById(`outro-ad-${idx}`);
     const mid   = document.getElementById(`mid-ad-${idx}`);
     const pos   = document.getElementById(`mid-ad-pos-${idx}`);
-    const mid2  = document.getElementById(`mid-ad-2-${idx}`);
-    const pos2  = document.getElementById(`mid-ad-2-pos-${idx}`);
     const status = document.getElementById(`ads-status-${idx}`);
 
     const parseId = (v) => (v === '' || v == null) ? null : parseInt(v, 10);
@@ -980,8 +975,15 @@
       outro_ad_id: parseId(outro.value),
       mid_ad_id:   parseId(mid.value),
       mid_ad_position_sec: parsePos(pos.value),
-      mid_ad_2_id: mid2 ? parseId(mid2.value) : null,
-      mid_ad_2_position_sec: pos2 ? parsePos(pos2.value) : null,
+      extra_mid_ad_ids: Array.from(
+        document.querySelectorAll(`#extra-mids-${idx} .extra-mid-select`)
+      ).map(el => parseId(el.value)).filter(v => v !== null),
+      extra_mid_positions: Array.from(
+        document.querySelectorAll(`#extra-mids-${idx} .extra-mid-row`)
+      ).filter(r => {
+        const sel = r.querySelector('.extra-mid-select');
+        return sel && sel.value !== '';
+      }).map(r => parsePos(r.querySelector('.extra-mid-pos').value)),
       description_ad_ids: Array.from(
         document.querySelectorAll(`#desc-ads-${idx} input[type="checkbox"]:checked`)
       ).map(cb => parseInt(cb.value, 10))
@@ -1003,7 +1005,6 @@
       intro.dataset.current = String(body.intro_ad_id || '');
       outro.dataset.current = String(body.outro_ad_id || '');
       mid.dataset.current = String(body.mid_ad_id || '');
-      if (mid2) mid2.dataset.current = String(body.mid_ad_2_id || '');
       status.textContent = '✓ saved';
       status.style.color = 'var(--muted)';
       setTimeout(() => { if (status.textContent === '✓ saved') status.textContent = ''; }, 1500);
@@ -1062,7 +1063,73 @@
     });
   }
 
-  loadAdsAndPopulate();
+  const MAX_EXTRA_MIDS = 3;
+
+  window.__addMidRow = function(idx, adId, posVal) {
+    const box = document.getElementById('extra-mids-' + idx);
+    if (!box) return;
+    const existing = box.querySelectorAll('.extra-mid-row').length;
+    if (existing >= MAX_EXTRA_MIDS) return;
+    const n = existing + 2;   // human-facing number: first extra is "#2"
+
+    const tpl = document.getElementById('mid-ad-' + idx);
+    const optionsHtml = tpl ? tpl.innerHTML : '<option value="">—</option>';
+
+    const row = document.createElement('div');
+    row.className = 'extra-mid-row';
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 130px 32px;gap:.5rem;align-items:end;margin-bottom:.5rem;';
+    row.innerHTML = `
+      <div>
+        <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">Mid-clip #${n}</div>
+        <select class="extra-mid-select" onchange="window.__saveSegmentAds(${idx})"
+                style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+          ${optionsHtml}
+        </select>
+      </div>
+      <div>
+        <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">At (sec)</div>
+        <input type="text" class="extra-mid-pos" placeholder="auto"
+               onblur="window.__saveSegmentAds(${idx})"
+               style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+      </div>
+      <button type="button" title="Remove"
+              onclick="this.closest('.extra-mid-row').remove(); window.__renumberMids(${idx}); window.__saveSegmentAds(${idx});"
+              style="padding:.5rem;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;">&times;</button>
+    `;
+    box.appendChild(row);
+    if (adId) row.querySelector('.extra-mid-select').value = String(adId);
+    if (posVal !== undefined && posVal !== null && posVal !== '') {
+      row.querySelector('.extra-mid-pos').value = posVal;
+    }
+    window.__renumberMids(idx);
+  };
+
+  window.__renumberMids = function(idx) {
+    const box = document.getElementById('extra-mids-' + idx);
+    if (!box) return;
+    box.querySelectorAll('.extra-mid-row').forEach((r, i) => {
+      const lbl = r.querySelector('div > div');
+      if (lbl) lbl.textContent = 'Mid-clip #' + (i + 2);
+    });
+    const btn = document.getElementById('add-mid-btn-' + idx);
+    if (btn) {
+      const count = box.querySelectorAll('.extra-mid-row').length;
+      btn.style.display = count >= MAX_EXTRA_MIDS ? 'none' : '';
+    }
+  };
+
+  // Restore saved extra mids once the base ad selects are populated
+  function restoreExtraMids() {
+    document.querySelectorAll('[id^="extra-mids-"]').forEach(box => {
+      const idx = box.dataset.segment;
+      const ids = (box.dataset.ids || '').split(',').filter(Boolean);
+      const poss = (box.dataset.positions || '').split(',');
+      ids.forEach((id, i) => window.__addMidRow(idx, id, poss[i]));
+      window.__renumberMids(idx);
+    });
+  }
+
+  loadAdsAndPopulate().then(restoreExtraMids).catch(restoreExtraMids);
   renderDescAdChecklists();
 })();
 </script>

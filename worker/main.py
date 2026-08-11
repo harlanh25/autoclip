@@ -55,6 +55,17 @@ def handle_job():
                 download_from_gcs(key, p)
                 ads[role] = p
 
+        # Additional mid-roll ads (list, max enforced upstream)
+        extra_mid_paths = []
+        for i, key in enumerate(payload.get('extra_mid_ad_gcs_keys') or []):
+            if not key:
+                continue
+            update_status(job_id, stage=f'downloading_mid_ad_{i + 2}', progress_pct=14)
+            ext = os.path.splitext(key)[1] or '.mp4'
+            p = os.path.join(work_dir, f'ad_mid{i + 2}{ext}')
+            download_from_gcs(key, p)
+            extra_mid_paths.append(p)
+
         update_status(job_id, stage='composing', progress_pct=20)
         composed_local = os.path.join(work_dir, 'composed.mp4')
         compose_clip_with_ads(
@@ -63,6 +74,8 @@ def handle_job():
             mid_ad=ads.get('mid'),
             outro_ad=ads.get('outro'),
             mid_position_sec=payload.get('mid_ad_position_sec'),
+            extra_mid_ads=extra_mid_paths,
+            extra_mid_positions=payload.get('extra_mid_positions') or [],
             output_path=composed_local,
             progress_callback=lambda pct: update_status(
                 job_id, progress_pct=20 + int(pct * 0.65)

@@ -1453,6 +1453,10 @@ def _enqueue_publish_task(job_id, session_id, segment_index, segment, session):
         'mid_ad_gcs_key': _ad_key(segment.get('mid_ad_id')),
         'outro_ad_gcs_key': _ad_key(segment.get('outro_ad_id')),
         'mid_ad_position_sec': segment.get('mid_ad_position_sec'),
+        'extra_mid_ad_gcs_keys': [
+            _ad_key(a) for a in (segment.get('extra_mid_ad_ids') or [])
+        ],
+        'extra_mid_positions': segment.get('extra_mid_positions') or [],
     }
 
     client = tasks_v2.CloudTasksClient()
@@ -3728,9 +3732,9 @@ def save_segment_ads(session_id, segment_index):
       {"intro_ad_id": int|null,
        "outro_ad_id": int|null,
        "mid_ad_id": int|null,
-       "mid_ad_2_id": int|null,
        "mid_ad_position_sec": float|null,     (null = AI auto-places)
-       "mid_ad_2_position_sec": float|null,
+       "extra_mid_ad_ids": [int, ...],        (max 3 beyond the first)
+       "extra_mid_positions": [float|null, ...],
        "description_ad_ids": [int, ...]}      (independent of video placement)
 
     Only keys present in the body are updated; omitted keys are untouched.
@@ -3771,14 +3775,14 @@ def save_segment_ads(session_id, segment_index):
         return (ad_id, None)
 
     updates = {}
-    for key in ('intro_ad_id', 'outro_ad_id', 'mid_ad_id', 'mid_ad_2_id'):
+    for key in ('intro_ad_id', 'outro_ad_id', 'mid_ad_id'):
         if key in payload:
             val, err = _validate_ad(payload[key])
             if err:
                 return jsonify({'error': f'{key}: {err}'}), 400
             updates[key] = val
 
-    for pkey in ('mid_ad_position_sec', 'mid_ad_2_position_sec'):
+    for pkey in ('mid_ad_position_sec',):
         if pkey in payload:
             raw = payload[pkey]
             if raw is None or (isinstance(raw, str) and raw.strip() == ''):
@@ -3791,6 +3795,39 @@ def save_segment_ads(session_id, segment_index):
                     updates[pkey] = pos
                 except (TypeError, ValueError):
                     return jsonify({'error': f'{pkey} must be a number'}), 400
+
+    # Additional mid-roll ads beyond the first. Max 3 extra (4 total mids).
+    MAX_EXTRA_MIDS = 3
+    if 'extra_mid_ad_ids' in payload:
+        raw = payload['extra_mid_ad_ids'] or []
+        if not isinstance(raw, list):
+            return jsonify({'error': 'extra_mid_ad_ids must be a list'}), 400
+        if len(raw) > MAX_EXTRA_MIDS:
+            return jsonify({'error': f'at most {MAX_EXTRA_MIDS} extra mid ads'}), 400
+        clean = []
+        for aid in raw:
+            val, err = _validate_ad(aid)
+            if err:
+                return jsonify({'error': f'extra_mid_ad_ids: {err}'}), 400
+            clean.append(val)
+        updates['extra_mid_ad_ids'] = clean
+    if 'extra_mid_positions' in payload:
+        raw = payload['extra_mid_positions'] or []
+        if not isinstance(raw, list):
+            return jsonify({'error': 'extra_mid_positions must be a list'}), 400
+        clean = []
+        for p in raw[:MAX_EXTRA_MIDS]:
+            if p is None or (isinstance(p, str) and p.strip() == ''):
+                clean.append(None)
+            else:
+                try:
+                    fp = float(p)
+                    if fp < 0:
+                        return jsonify({'error': 'extra_mid_positions must be >= 0'}), 400
+                    clean.append(fp)
+                except (TypeError, ValueError):
+                    return jsonify({'error': 'extra_mid_positions must be numbers'}), 400
+        updates['extra_mid_positions'] = clean
 
     # Description ads are INDEPENDENT of video ad placement. This is the list
     # whose description_text gets appended to the YouTube description.
