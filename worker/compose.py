@@ -98,8 +98,28 @@ def compose_clip_with_ads(
     if progress_callback:
         progress_callback(15)
 
-    if mid_v and mid_position_sec is None:
-        mid_position_sec = _find_silence_split(clip_path)
+    if mid_v:
+        # Probe clip duration and validate mid_position_sec
+        _dur_r = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+             '-of', 'default=noprint_wrappers=1:nokey=1', clip_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        try:
+            _clip_dur = float(_dur_r.stdout.strip())
+        except Exception:
+            _clip_dur = 0.0
+        log.info(f'Clip duration: {_clip_dur}s, mid_position_sec: {mid_position_sec}')
+        # If clip is too short for a mid split, skip mid ad entirely
+        if _clip_dur < 10.0:
+            log.warning(f'Clip too short ({_clip_dur}s) for mid ad; skipping mid')
+            mid_v = None
+        elif mid_position_sec is None:
+            mid_position_sec = _find_silence_split(clip_path, window_secs=min(180, _clip_dur - 3))
+        # Clamp so both parts have real content
+        if mid_v is not None:
+            mid_position_sec = max(3.0, min(mid_position_sec, _clip_dur - 3.0))
+            log.info(f'Clamped mid_position_sec: {mid_position_sec}')
 
     if mid_v:
         part1 = os.path.join(work_dir, 'clip_part1.mp4')
