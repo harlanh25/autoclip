@@ -228,11 +228,11 @@ def set_user_tier(user_id, video_tier=None, audio_tier=None):
     if video_tier:
         assert video_tier in VIDEO_CAPS, f'bad video_tier {video_tier}'
         updates += ['video_tier=?', 'clipping_monthly_cap=?', 'has_clipping=?']
-        values += [video_tier, VIDEO_CAPS[video_tier], 1 if video_tier != 'demo' else 1]
+        values += [video_tier, VIDEO_CAPS[video_tier], 1 if video_tier != 'demo' else 0]
     if audio_tier:
         assert audio_tier in AUDIO_CAPS, f'bad audio_tier {audio_tier}'
         updates += ['audio_tier=?', 'audio_monthly_cap=?', 'has_audio=?']
-        values += [audio_tier, AUDIO_CAPS[audio_tier], 1 if audio_tier != 'demo' else 1]
+        values += [audio_tier, AUDIO_CAPS[audio_tier], 1 if audio_tier != 'demo' else 0]
     if not updates:
         return
     values.append(user_id)
