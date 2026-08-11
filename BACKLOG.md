@@ -23,3 +23,11 @@
 - Compose caching (skip ffmpeg if same inputs re-published)
 - Priority queues (paid tier = faster workers)
 - Better observability (Cloud Monitoring dashboards, alerting)
+
+## Data lifecycle policy (Phase 5-ish)
+- [ ] Session JSON: keep indefinitely (tiny, useful history)
+- [ ] Source videos in GCS: auto-delete after N days (differentiate free vs paid)
+- [ ] Cut clips in GCS: auto-delete after N days
+- [ ] Composed intermediate files: already deleted post-upload ✓
+- [ ] Soft-delete on user account deletion, hard-delete after 30 days
+- [ ] Cost dashboard per user (storage GB + compute minutes)
