@@ -152,12 +152,23 @@
 
   .add-topic:hover { border-color: #3b82f6; color: #3b82f6; }
 
+  .transcript-tools {
+    display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;
+  }
+  .transcript-search {
+    flex: 1; background: #0a0a0f; border: 1px solid #222; border-radius: 6px;
+    padding: 0.5rem 0.75rem; color: #e8e8f0; font-size: 0.85rem;
+  }
+  .transcript-search:focus { outline: none; border-color: #2563eb; }
+  .transcript-count { color: #6b6b8a; font-size: 0.75rem; white-space: nowrap; }
+  .tmark { background: #2563eb; color: #fff; border-radius: 2px; padding: 0 2px; }
+  .transcript-box .ts { cursor: pointer; }
   .transcript-box {
     background: #0a0a0f;
     border: 1px solid #222;
     border-radius: 8px;
     padding: 1rem;
-    max-height: 300px;
+    max-height: 60vh;
     overflow-y: auto;
     font-size: 0.8rem;
     line-height: 1.6;
@@ -299,6 +310,12 @@
       </p>
       <button class="btn" onclick="transcribeVideo()">Start Transcription</button>
       <div id="transcript-output" style="margin-top: 1rem; display: none;">
+        <div class="transcript-tools">
+          <input type="text" id="transcript-search" class="transcript-search"
+                 placeholder="Search transcript\u2026 (click a timestamp to copy)"
+                 oninput="renderTranscript(this.value)">
+          <span id="transcript-count" class="transcript-count"></span>
+        </div>
         <div class="transcript-box" id="transcript-box"></div>
       </div>
     </div>
@@ -384,6 +401,14 @@
       // Mark transcribe as done
       const transcribeBtn = document.querySelector('button[onclick*="transcribe" i]');
       if (transcribeBtn) { transcribeBtn.textContent = '✓ Transcribed'; transcribeBtn.disabled = true; }
+      // Restore the transcript itself so scroll + search work after a reload
+      try {
+        __transcriptData = {{ (session.transcript or []) | tojson }};
+        if (__transcriptData.length) {
+          renderTranscript('');
+          document.getElementById('transcript-output').style.display = 'block';
+        }
+      } catch (e) { console.error('transcript restore failed', e); }
     }
   });
 
@@ -397,9 +422,65 @@
   }
 
   function formatTime(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    seconds = Math.max(0, Math.floor(seconds || 0));
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    const p = (n) => n.toString().padStart(2, '0');
+    return h > 0 ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
+  }
+
+  // Mirror of clips.html displayToSeconds - accepts ss, mm:ss, or hh:mm:ss
+  function displayToSeconds(str) {
+    if (typeof str !== 'string') return 0;
+    const parts = str.trim().split(':').map(p => parseInt(p, 10) || 0);
+    if (parts.length === 1) return parts[0];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+  }
+
+  // Full transcript kept in memory for search
+  let __transcriptData = [];
+
+  function renderTranscript(filter) {
+    const box = document.getElementById('transcript-box');
+    if (!box) return;
+    const q = (filter || '').trim().toLowerCase();
+    box.innerHTML = '';
+    let shown = 0;
+    __transcriptData.forEach(seg => {
+      const text = seg.text || '';
+      if (q && text.toLowerCase().indexOf(q) === -1) return;
+      shown++;
+      const div = document.createElement('div');
+      div.className = 'transcript-segment';
+      let safe = text.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      if (q) {
+        const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+        safe = safe.replace(re, '<mark class="tmark">$1</mark>');
+      }
+      div.innerHTML = '<span class="ts" title="Click to copy" onclick="copyTs(this)">['
+                    + formatTime(seg.start) + ']</span>' + safe;
+      box.appendChild(div);
+    });
+    const cnt = document.getElementById('transcript-count');
+    if (cnt) {
+      cnt.textContent = q
+        ? shown + ' of ' + __transcriptData.length + ' lines match'
+        : __transcriptData.length + ' lines';
+    }
+    if (q && shown === 0) {
+      box.innerHTML = '<div style="color:#666;padding:0.5rem">No matches.</div>';
+    }
+  }
+
+  function copyTs(el) {
+    const t = el.textContent.replace(/[\[\]]/g, '');
+    navigator.clipboard.writeText(t);
+    const orig = el.style.color;
+    el.style.color = '#22c55e';
+    setTimeout(() => { el.style.color = orig; }, 600);
   }
 
   async function transcribeVideo() {
@@ -422,14 +503,8 @@
       log(`Transcription complete! ${data.segments_count} segments found.`, 'success');
 
       // Show transcript preview
-      const box = document.getElementById('transcript-box');
-      box.innerHTML = '';
-      data.transcript.slice(0, 50).forEach(seg => {
-        const div = document.createElement('div');
-        div.className = 'transcript-segment';
-        div.innerHTML = `<span class="ts">[${formatTime(seg.start)}]</span>${seg.text}`;
-        box.appendChild(div);
-      });
+      __transcriptData = data.transcript || [];
+      renderTranscript('');
       document.getElementById('transcript-output').style.display = 'block';
 
       // Enable step 2
@@ -525,8 +600,8 @@
         </div>
         <div class="segment-summary">${seg.summary || ''}</div>
         <div class="time-inputs">
-          <input type="number" value="${seg.start_time}" placeholder="Start (sec)" onchange="updateSegment(${i}, 'start_time', this.value)" />
-          <input type="number" value="${seg.end_time}" placeholder="End (sec)" onchange="updateSegment(${i}, 'end_time', this.value)" />
+          <input type="text" value="${formatTime(seg.start_time)}" placeholder="hh:mm:ss" onchange="updateSegment(${i}, 'start_time', displayToSeconds(this.value)); this.value = formatTime(displayToSeconds(this.value));" />
+          <input type="text" value="${formatTime(seg.end_time)}" placeholder="hh:mm:ss" onchange="updateSegment(${i}, 'end_time', displayToSeconds(this.value)); this.value = formatTime(displayToSeconds(this.value));" />
         </div>
       `;
       out.appendChild(div);
