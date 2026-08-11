@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thumbnails Library — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --bg: #07070f;
+    --bg2: #0e0e1a; --bg3: #14141f; --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav { background: rgba(7,7,15,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .nav-left { display: flex; align-items: center; gap: 2rem; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-text .accent { color: var(--accent-light); }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-weight: 500; }
+  nav a:hover { color: var(--text); }
+  nav a.active { color: var(--text); }
+  .nav-user { display: flex; align-items: center; gap: 0.75rem; color: var(--muted); font-size: 0.85rem; }
+  .nav-user img { height: 28px; width: 28px; border-radius: 50%; }
+
+  .container { max-width: 1100px; margin: 3rem auto; padding: 0 2rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
+  h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-top: 0.25rem; }
+  .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--accent); color: #fff; text-decoration: none; padding: 0.75rem 1.25rem; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: background 0.2s; border: none; cursor: pointer; font-family: inherit; }
+  .btn-primary:hover { background: var(--accent-light); }
+
+  .config-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+  .config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .config-name { font-size: 1.1rem; font-weight: 700; }
+  .config-meta { color: var(--muted); font-size: 0.8rem; line-height: 1.7; }
+  .config-meta code { background: var(--bg); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; color: var(--accent-light); }
+  .badges { display: flex; gap: 0.4rem; }
+  .badge { font-size: 0.7rem; font-weight: 700; padding: 0.25rem 0.55rem; border-radius: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .badge-active { background: rgba(52,168,83,0.15); color: #4ade80; }
+  .badge-inactive { background: rgba(107,107,138,0.15); color: var(--muted); }
+  .badge-warn { background: rgba(234,179,8,0.15); color: #fbbf24; }
+  .actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+  .btn-sm { padding: 0.5rem 0.9rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-family: inherit; text-decoration: none; }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent-light); }
+  .btn-sm.danger { color: #f87171; border-color: rgba(239,68,68,0.3); }
+  .btn-sm.danger:hover { background: rgba(239,68,68,0.1); }
+
+  .empty-state { background: var(--bg2); border: 2px dashed var(--border); border-radius: 12px; padding: 3rem 2rem; text-align: center; }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 1rem; }
+  .empty-state h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .empty-state p { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+  /* Modal for create/edit */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; padding: 2rem; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .modal-subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+  .form-group { margin-bottom: 1.25rem; }
+  label { display: block; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 0.5rem; }
+  input[type="text"], select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1rem; color: var(--text); font-size: 0.9rem; font-family: inherit; }
+  input[type="text"]:focus, select:focus { outline: none; border-color: var(--accent); }
+  .help-text { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; line-height: 1.5; }
+  .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+  .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 0.7rem 1.25rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .inline-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent-light); padding: 0.55rem 0.9rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; font-family: inherit; margin-left: 0.5rem; }
+  .inline-btn:hover { background: rgba(37,99,235,0.1); }
+  .fetch-status { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <div class="brand"><img src="/static/img/autoclip_mark.png" alt="AutoClip"><span class="brand-text">Auto<span class="accent">Clip</span></span></div>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/channels">Channels</a>
+    <a href="/audio">Audio</a>
+    <a href="/ads">Ad Library</a>
+    <a href="/thumbnails" class="active">Thumbnails</a>
+    <a href="/account">Account</a>
+    {% if current_user.role == 'admin' %}<a href="/admin/users">Admin</a>{% endif %}
+  </div>
+  <div class="nav-user">
+    {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
+    <span>{{ current_user.name or current_user.email }}</span>
+    <a href="/logout" style="color: var(--muted); font-size: 0.8rem;">(sign out)</a>
+  </div>
+</nav>
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Thumbnails Library</h1>
+      <p class="subtitle">Per-channel thumbnails. Tag the good ones as style references — those show up as pickable inspiration in the clip editor.</p>
+    </div>
+  </div>
+
+  {% if not channels %}
+  <div style="padding:2rem;border:1px dashed var(--muted, #666);border-radius:8px;text-align:center;color:var(--muted, #888);">
+    You don't have access to any channels yet. Ask an admin to grant access.
+  </div>
+  {% else %}
+
+  <div style="display:flex;gap:1.25rem;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;">
+    <div>
+      <label for="channel-select" style="display:block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted, #888);margin-bottom:.35rem;">Channel</label>
+      <select id="channel-select" style="padding:.55rem .7rem;background:var(--card, #1a1a1a);color:var(--fg, #eee);border:1px solid var(--border, #333);border-radius:6px;min-width:280px;font-size:.95rem;">
+        {% for c in channels %}<option value="{{ c.id }}">{{ c.title }}</option>{% endfor %}
+      </select>
+    </div>
+    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;padding-bottom:.55rem;">
+      <input type="checkbox" id="style-only" style="width:1rem;height:1rem;"> <span style="font-size:.9rem;">Style references only</span>
+    </label>
+    <div style="margin-left:auto;padding-bottom:.15rem;">
+      <button class="btn-primary" onclick="document.getElementById('upload-input').click()" id="upload-btn">📤 Upload Thumbnail</button>
+      <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleUpload(event)">
+    </div>
+  </div>
+
+  <div id="upload-status" style="margin-bottom:1rem;color:var(--muted, #888);font-size:.9rem;min-height:1.2em;"></div>
+
+  <div id="thumb-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;">
+    <div style="grid-column:1/-1;text-align:center;color:var(--muted, #888);padding:2rem;">Loading…</div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(function(){
+  const CHANNEL_SELECT = document.getElementById('channel-select');
+  if (!CHANNEL_SELECT) return;  // no channels — nothing to wire
+  const STYLE_ONLY = document.getElementById('style-only');
+  const GRID = document.getElementById('thumb-grid');
+  const UPLOAD_INPUT = document.getElementById('upload-input');
+  const UPLOAD_STATUS = document.getElementById('upload-status');
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+  function setStatus(msg, isError) {
+    UPLOAD_STATUS.textContent = msg || '';
+    UPLOAD_STATUS.style.color = isError ? '#f66' : 'var(--muted, #888)';
+  }
+
+  async function fetchThumbnails() {
+    const cid = CHANNEL_SELECT.value;
+    const styleOnly = STYLE_ONLY.checked ? '&style_ref_only=1' : '';
+    GRID.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted, #888);padding:2rem;">Loading…</div>';
+    try {
+      const r = await fetch(`/api/thumbnails/library?channel_id=${cid}${styleOnly}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      renderThumbnails(data.thumbnails || []);
+    } catch (e) {
+      GRID.innerHTML = `<div style="grid-column:1/-1;color:#f66;padding:2rem;text-align:center;">Failed to load: ${esc(e.message || e)}</div>`;
+    }
+  }
+
+  function renderThumbnails(thumbs) {
+    if (!thumbs.length) {
+      GRID.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted, #888);padding:3rem 2rem;">No thumbnails for this channel yet. Upload one or generate from the clip editor.</div>';
+      return;
+    }
+    GRID.innerHTML = thumbs.map(t => `
+      <div class="thumb-card" data-id="${t.id}" style="background:var(--card, #1e1e1e);border:1px solid var(--border, #333);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="aspect-ratio:16/9;background:#000;overflow:hidden;">
+          ${t.display_url
+            ? `<img src="${esc(t.display_url)}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" alt="">`
+            : '<div style="color:#666;text-align:center;padding-top:35%;font-size:.85rem;">no preview</div>'}
+        </div>
+        <div style="padding:.65rem .75rem;font-size:.85rem;display:flex;flex-direction:column;gap:.5rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="color:var(--muted, #888);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">${esc(t.source_type || 'unknown')}</span>
+            <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.8rem;user-select:none;">
+              <input type="checkbox" ${t.is_style_reference ? 'checked' : ''} onchange="window.__toggleRef(${t.id}, this.checked, this)">
+              <span>style ref</span>
+            </label>
+          </div>
+          <div style="display:flex;gap:.4rem;">
+            <a href="/api/thumbnails/${t.id}/download" style="flex:1;text-align:center;padding:.35rem .5rem;text-decoration:none;font-size:.8rem;border:1px solid var(--border, #333);border-radius:5px;color:var(--fg, #eee);">⬇ Download</a>
+            <button onclick="window.__deleteThumb(${t.id})" style="flex:1;padding:.35rem .5rem;background:transparent;border:1px solid #a33;border-radius:5px;color:#e88;cursor:pointer;font-size:.8rem;">🗑 Delete</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.__toggleRef = async function(id, val, checkbox) {
+    try {
+      const r = await fetch(`/api/thumbnails/${id}/toggle_style_ref`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({is_style_reference: val})
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (STYLE_ONLY.checked && !val) {
+        // Currently filtering to style refs; card should disappear
+        const card = document.querySelector(`.thumb-card[data-id="${id}"]`);
+        if (card) card.remove();
+      }
+    } catch (e) {
+      alert('Toggle failed: ' + (e.message || e));
+      checkbox.checked = !val;
+    }
+  };
+
+  window.__deleteThumb = async function(id) {
+    if (!confirm('Delete this thumbnail? This also removes it from GCS.')) return;
+    try {
+      const r = await fetch(`/api/thumbnails/${id}/delete`, {method: 'POST'});
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const card = document.querySelector(`.thumb-card[data-id="${id}"]`);
+      if (card) card.remove();
+      if (!GRID.querySelector('.thumb-card')) fetchThumbnails();
+    } catch (e) {
+      alert('Delete failed: ' + (e.message || e));
+    }
+  };
+
+  async function handleUpload(evt) {
+    const file = evt.target.files[0];
+    if (!file) return;
+    const cid = CHANNEL_SELECT.value;
+    if (!cid) { setStatus('Pick a channel first', true); return; }
+    const btn = document.getElementById('upload-btn');
+    btn.disabled = true;
+    setStatus(`Uploading ${file.name}…`);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('channel_id', cid);
+    try {
+      const r = await fetch('/api/thumbnails/library/upload', {method: 'POST', body: fd});
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setStatus(`✓ Uploaded (id ${data.id})`);
+      UPLOAD_INPUT.value = '';
+      fetchThumbnails();
+    } catch (e) {
+      setStatus('Upload failed: ' + (e.message || e), true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  // Expose to inline onchange (declared at input's onchange="handleUpload(event)")
+  window.handleUpload = handleUpload;
+
+  CHANNEL_SELECT.addEventListener('change', fetchThumbnails);
+  STYLE_ONLY.addEventListener('change', fetchThumbnails);
+  fetchThumbnails();
+})();
+</script>
+</body>
+</html>

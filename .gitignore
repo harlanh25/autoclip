@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Local state that must never be pushed
+autoclip.db
+sessions/
+static/uploads/
+static/clips/
+static/thumbnails/
+static/ads/
+tmp_compose/
+
+# Secrets — CRITICAL
+credentials/
+youtube_cookies.txt
+.env
+
+# Old patch scripts (already applied, no longer needed in repo)
+patch_app*.py
+patch_clips_*.py
+patch_gcs_*.py
+patch_index_*.py
+patch_detect.py
+migrate_to_gcs.py
+migrate_to_multitenant.py
+app.py.pre-*
+
+# Backup files
+*.bak
+*.bak-*
+templates/*.bak-*
+templates/*.deleted-*
+static/*.deleted-*
+worker.py.bak-*
+*.log
+
+# Editor / OS
+*.swp
+*.swo
+.DS_Store

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ad Library — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --bg: #07070f;
+    --bg2: #0e0e1a; --bg3: #14141f; --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav { background: rgba(7,7,15,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .nav-left { display: flex; align-items: center; gap: 2rem; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-text .accent { color: var(--accent-light); }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-weight: 500; }
+  nav a:hover { color: var(--text); }
+  nav a.active { color: var(--text); }
+  .nav-user { display: flex; align-items: center; gap: 0.75rem; color: var(--muted); font-size: 0.85rem; }
+  .nav-user img { height: 28px; width: 28px; border-radius: 50%; }
+
+  .container { max-width: 1100px; margin: 3rem auto; padding: 0 2rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
+  h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-top: 0.25rem; }
+  .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--accent); color: #fff; text-decoration: none; padding: 0.75rem 1.25rem; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: background 0.2s; border: none; cursor: pointer; font-family: inherit; }
+  .btn-primary:hover { background: var(--accent-light); }
+
+  .config-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+  .config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .config-name { font-size: 1.1rem; font-weight: 700; }
+  .config-meta { color: var(--muted); font-size: 0.8rem; line-height: 1.7; }
+  .config-meta code { background: var(--bg); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; color: var(--accent-light); }
+  .badges { display: flex; gap: 0.4rem; }
+  .badge { font-size: 0.7rem; font-weight: 700; padding: 0.25rem 0.55rem; border-radius: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .badge-active { background: rgba(52,168,83,0.15); color: #4ade80; }
+  .badge-inactive { background: rgba(107,107,138,0.15); color: var(--muted); }
+  .badge-warn { background: rgba(234,179,8,0.15); color: #fbbf24; }
+  .actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+  .btn-sm { padding: 0.5rem 0.9rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-family: inherit; text-decoration: none; }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent-light); }
+  .btn-sm.danger { color: #f87171; border-color: rgba(239,68,68,0.3); }
+  .btn-sm.danger:hover { background: rgba(239,68,68,0.1); }
+
+  .empty-state { background: var(--bg2); border: 2px dashed var(--border); border-radius: 12px; padding: 3rem 2rem; text-align: center; }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 1rem; }
+  .empty-state h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .empty-state p { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+  /* Modal for create/edit */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; padding: 2rem; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .modal-subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+  .form-group { margin-bottom: 1.25rem; }
+  label { display: block; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 0.5rem; }
+  input[type="text"], select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1rem; color: var(--text); font-size: 0.9rem; font-family: inherit; }
+  input[type="text"]:focus, select:focus { outline: none; border-color: var(--accent); }
+  .help-text { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; line-height: 1.5; }
+  .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+  .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 0.7rem 1.25rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .inline-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent-light); padding: 0.55rem 0.9rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; font-family: inherit; margin-left: 0.5rem; }
+  .inline-btn:hover { background: rgba(37,99,235,0.1); }
+  .fetch-status { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <div class="brand"><img src="/static/img/autoclip_mark.png" alt="AutoClip"><span class="brand-text">Auto<span class="accent">Clip</span></span></div>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/channels">Channels</a>
+    <a href="/audio">Audio</a>
+    <a href="/ads" class="active">Ad Library</a>
+    <a href="/thumbnails">Thumbnails</a>
+    <a href="/account">Account</a>
+    {% if current_user.role == 'admin' %}<a href="/admin/users">Admin</a>{% endif %}
+  </div>
+  <div class="nav-user">
+    {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
+    <span>{{ current_user.name or current_user.email }}</span>
+    <a href="/logout" style="color: var(--muted); font-size: 0.8rem;">(sign out)</a>
+  </div>
+</nav>
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Ad Library</h1>
+      <p class="subtitle">Per-channel ad reads on GCS. Assign one intro and one outro per channel to bookend your clips (composition ships in the next deploy).</p>
+    </div>
+  </div>
+
+  {% if not channels %}
+  <div style="padding:2rem;border:1px dashed var(--muted, #666);border-radius:8px;text-align:center;color:var(--muted, #888);">
+    You don't have access to any channels yet. Ask an admin to grant access.
+  </div>
+  {% else %}
+
+  <div style="display:flex;gap:1.25rem;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;">
+    <div>
+      <label for="channel-select" style="display:block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted, #888);margin-bottom:.35rem;">Channel</label>
+      <select id="channel-select" style="padding:.55rem .7rem;background:var(--card, #1a1a1a);color:var(--fg, #eee);border:1px solid var(--border, #333);border-radius:6px;min-width:280px;font-size:.95rem;">
+        {% for c in channels %}<option value="{{ c.id }}">{{ c.title }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="margin-left:auto;padding-bottom:.15rem;">
+      <button class="btn-primary" onclick="toggleUploadPanel()" id="upload-toggle-btn">📤 Upload New Ad</button>
+    </div>
+  </div>
+
+  <div id="upload-panel" style="display:none;background:var(--card, #1a1a1a);border:1px solid var(--border, #333);border-radius:8px;padding:1rem;margin-bottom:1.25rem;">
+    <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
+      <div style="flex:1;min-width:220px;">
+        <label style="display:block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted, #888);margin-bottom:.35rem;">Ad Name</label>
+        <input type="text" id="upload-name" placeholder="e.g. PrizePicks 30-sec" style="width:100%;padding:.55rem .7rem;background:var(--bg, #0a0a0a);color:var(--fg, #eee);border:1px solid var(--border, #333);border-radius:6px;font-size:.9rem;">
+      </div>
+      <div style="flex:1;min-width:220px;">
+        <label style="display:block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted, #888);margin-bottom:.35rem;">File (MP3/MP4/WAV, ≤200MB)</label>
+        <input type="file" id="upload-file" accept="audio/*,video/*" style="width:100%;padding:.4rem;background:var(--bg, #0a0a0a);color:var(--fg, #eee);border:1px solid var(--border, #333);border-radius:6px;font-size:.85rem;">
+      </div>
+      <div>
+        <button class="btn-primary" onclick="doUpload()" id="upload-submit-btn">Upload</button>
+        <button onclick="toggleUploadPanel()" style="padding:.5rem 1rem;background:transparent;border:1px solid var(--border, #333);border-radius:6px;color:var(--fg, #eee);cursor:pointer;">Cancel</button>
+      </div>
+    </div>
+    <div id="upload-status" style="margin-top:.75rem;font-size:.85rem;color:var(--muted, #888);min-height:1.2em;"></div>
+  </div>
+
+  <div id="assignments-banner" style="background:var(--card, #1a1a1a);border:1px solid var(--border, #333);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;font-size:.9rem;">
+    <span style="color:var(--muted, #888);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Current bookends:</span>
+    <span><strong style="color:var(--muted, #888);">Intro:</strong> <span id="intro-name">—</span></span>
+    <span><strong style="color:var(--muted, #888);">Outro:</strong> <span id="outro-name">—</span></span>
+  </div>
+
+  <audio id="player" controls style="display:none;width:100%;margin-bottom:1rem;"></audio>
+
+  <div id="ads-container">
+    <div style="text-align:center;color:var(--muted, #888);padding:2rem;">Loading…</div>
+  </div>
+  {% endif %}
+</div>
+
+<style>
+  .role-btn { padding:.3rem .65rem; border:1px solid var(--border, #333); background:transparent; color:var(--muted, #888); border-radius:4px; cursor:pointer; font-size:.75rem; margin-right:.2rem; }
+  .role-btn.active { background:var(--primary, #4af); color:#000; border-color:var(--primary, #4af); font-weight:600; }
+  .role-btn:hover:not(.active) { color:var(--fg, #eee); border-color:var(--fg, #666); }
+  .ads-table { width:100%; border-collapse:collapse; background:var(--card, #1a1a1a); border:1px solid var(--border, #333); border-radius:8px; overflow:hidden; }
+  .ads-table th { text-align:left; padding:.75rem 1rem; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted, #888); border-bottom:1px solid var(--border, #333); background:var(--bg, #0a0a0a); }
+  .ads-table td { padding:.75rem 1rem; border-bottom:1px solid var(--border, #333); font-size:.9rem; vertical-align:middle; }
+  .ads-table tr:last-child td { border-bottom:none; }
+  .ads-table .actions { text-align:right; white-space:nowrap; }
+  .ads-table .actions button, .ads-table .actions a { padding:.3rem .55rem; margin-left:.25rem; background:transparent; border:1px solid var(--border, #333); border-radius:4px; color:var(--fg, #eee); cursor:pointer; text-decoration:none; font-size:.85rem; display:inline-block; }
+  .ads-table .actions .del { color:#e88; border-color:#a33; }
+</style>
+
+<script>
+(function(){
+  const CHANNEL_SELECT = document.getElementById('channel-select');
+  if (!CHANNEL_SELECT) return;
+  const CONTAINER = document.getElementById('ads-container');
+  const INTRO_NAME = document.getElementById('intro-name');
+  const OUTRO_NAME = document.getElementById('outro-name');
+  const PLAYER = document.getElementById('player');
+  const UPLOAD_PANEL = document.getElementById('upload-panel');
+  const UPLOAD_STATUS = document.getElementById('upload-status');
+  const UPLOAD_NAME = document.getElementById('upload-name');
+  const UPLOAD_FILE = document.getElementById('upload-file');
+  const UPLOAD_SUBMIT = document.getElementById('upload-submit-btn');
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmtDuration(sec) {
+    if (!sec && sec !== 0) return '—';
+    const m = Math.floor(sec/60), s = Math.round(sec%60);
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
+  function fmtSize(b) {
+    if (!b) return '—';
+    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+    return (b/1024/1024).toFixed(1) + ' MB';
+  }
+
+  async function fetchAds() {
+    const cid = CHANNEL_SELECT.value;
+    CONTAINER.innerHTML = '<div style="text-align:center;color:var(--muted, #888);padding:2rem;">Loading…</div>';
+    try {
+      const r = await fetch(`/api/ads/library?channel_id=${cid}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      renderAds(data);
+    } catch (e) {
+      CONTAINER.innerHTML = `<div style="color:#f66;padding:2rem;text-align:center;">Failed to load: ${esc(e.message || e)}</div>`;
+    }
+  }
+
+  function renderAds(data) {
+    const ads = data.ads || [];
+    // Update banner
+    const intro = ads.find(a => a.id === data.intro_ad_id);
+    const outro = ads.find(a => a.id === data.outro_ad_id);
+    INTRO_NAME.textContent = intro ? intro.display_name : '— none set —';
+    OUTRO_NAME.textContent = outro ? outro.display_name : '— none set —';
+    INTRO_NAME.style.color = intro ? 'var(--fg, #eee)' : 'var(--muted, #666)';
+    OUTRO_NAME.style.color = outro ? 'var(--fg, #eee)' : 'var(--muted, #666)';
+
+    if (!ads.length) {
+      CONTAINER.innerHTML = '<div style="text-align:center;color:var(--muted, #888);padding:3rem 2rem;">No ads for this channel yet. Upload one above.</div>';
+      return;
+    }
+    CONTAINER.innerHTML = `<table class="ads-table"><thead><tr>
+      <th>Ad</th><th>Duration</th><th>Size</th><th>Role</th><th class="actions">Actions</th>
+    </tr></thead><tbody>` +
+      ads.map(a => `
+        <tr data-id="${a.id}">
+          <td><strong>${esc(a.display_name)}</strong><br><span style="color:var(--muted, #888);font-size:.75rem;">${esc(a.content_type || '')}</span></td>
+          <td>${fmtDuration(a.duration_sec)}</td>
+          <td>${fmtSize(a.file_size_bytes)}</td>
+          <td>
+            <button class="role-btn ${a.role==='intro'?'active':''}" onclick="window.__setRole(${a.id}, 'intro')">Intro</button>
+            <button class="role-btn ${a.role==='outro'?'active':''}" onclick="window.__setRole(${a.id}, 'outro')">Outro</button>
+            <button class="role-btn ${a.role==='none'?'active':''}" onclick="window.__setRole(${a.id}, 'none')">None</button>
+          </td>
+          <td class="actions">
+            <button onclick="window.__playAd(${a.id}, '${esc(a.display_url || '')}')">▶</button>
+            <a href="/api/ads/library/${a.id}/download">⬇</a>
+            <button class="del" onclick="window.__deleteAd(${a.id})">🗑</button>
+          </td>
+        </tr>
+      `).join('') +
+      '</tbody></table>';
+  }
+
+  window.__setRole = async function(id, role) {
+    try {
+      const r = await fetch(`/api/ads/library/${id}/set_role`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({role})
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      fetchAds();
+    } catch (e) {
+      alert('Failed to set role: ' + (e.message || e));
+    }
+  };
+
+  window.__deleteAd = async function(id) {
+    if (!confirm('Delete this ad? This also removes it from GCS.')) return;
+    try {
+      const r = await fetch(`/api/ads/library/${id}/delete`, {method: 'POST'});
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      fetchAds();
+    } catch (e) {
+      alert('Delete failed: ' + (e.message || e));
+    }
+  };
+
+  window.__playAd = function(id, url) {
+    if (!url) { alert('No preview URL available for this ad.'); return; }
+    PLAYER.src = url;
+    PLAYER.style.display = 'block';
+    PLAYER.play().catch(e => {
+      // Not fatal — user can hit the play button on the controls
+      console.warn('autoplay blocked:', e);
+    });
+  };
+
+  window.toggleUploadPanel = function() {
+    const shown = UPLOAD_PANEL.style.display !== 'none';
+    UPLOAD_PANEL.style.display = shown ? 'none' : 'block';
+    if (!shown) {
+      UPLOAD_NAME.focus();
+      UPLOAD_STATUS.textContent = '';
+    }
+  };
+
+  window.doUpload = async function() {
+    const file = UPLOAD_FILE.files[0];
+    if (!file) { UPLOAD_STATUS.textContent = 'Pick a file first'; UPLOAD_STATUS.style.color = '#f66'; return; }
+    const cid = CHANNEL_SELECT.value;
+    if (!cid) { UPLOAD_STATUS.textContent = 'Pick a channel first'; UPLOAD_STATUS.style.color = '#f66'; return; }
+    const name = UPLOAD_NAME.value.trim() || file.name;
+
+    UPLOAD_SUBMIT.disabled = true;
+    UPLOAD_STATUS.style.color = 'var(--muted, #888)';
+    UPLOAD_STATUS.textContent = `Uploading ${file.name} (${fmtSize(file.size)})…`;
+
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('channel_id', cid);
+    fd.append('display_name', name);
+    try {
+      const r = await fetch('/api/ads/library/upload', {method: 'POST', body: fd});
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      UPLOAD_STATUS.textContent = `✓ Uploaded (id ${data.id}, ${fmtDuration(data.duration_sec)})`;
+      UPLOAD_STATUS.style.color = 'var(--muted, #888)';
+      UPLOAD_NAME.value = '';
+      UPLOAD_FILE.value = '';
+      fetchAds();
+      setTimeout(() => { UPLOAD_PANEL.style.display = 'none'; }, 1200);
+    } catch (e) {
+      UPLOAD_STATUS.textContent = 'Upload failed: ' + (e.message || e);
+      UPLOAD_STATUS.style.color = '#f66';
+    } finally {
+      UPLOAD_SUBMIT.disabled = false;
+    }
+  };
+
+  CHANNEL_SELECT.addEventListener('change', fetchAds);
+  fetchAds();
+})();
+</script>
+</body>
+</html>

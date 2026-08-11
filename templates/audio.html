@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audio Sync — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --bg: #07070f;
+    --bg2: #0e0e1a; --bg3: #14141f; --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav { background: rgba(7,7,15,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .nav-left { display: flex; align-items: center; gap: 2rem; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-text .accent { color: var(--accent-light); }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-weight: 500; }
+  nav a:hover { color: var(--text); }
+  nav a.active { color: var(--text); }
+  .nav-user { display: flex; align-items: center; gap: 0.75rem; color: var(--muted); font-size: 0.85rem; }
+  .nav-user img { height: 28px; width: 28px; border-radius: 50%; }
+
+  .container { max-width: 1100px; margin: 3rem auto; padding: 0 2rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
+  h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-top: 0.25rem; }
+  .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--accent); color: #fff; text-decoration: none; padding: 0.75rem 1.25rem; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: background 0.2s; border: none; cursor: pointer; font-family: inherit; }
+  .btn-primary:hover { background: var(--accent-light); }
+
+  .config-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+  .config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .config-name { font-size: 1.1rem; font-weight: 700; }
+  .config-meta { color: var(--muted); font-size: 0.8rem; line-height: 1.7; }
+  .config-meta code { background: var(--bg); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; color: var(--accent-light); }
+  .badges { display: flex; gap: 0.4rem; }
+  .badge { font-size: 0.7rem; font-weight: 700; padding: 0.25rem 0.55rem; border-radius: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .badge-active { background: rgba(52,168,83,0.15); color: #4ade80; }
+  .badge-inactive { background: rgba(107,107,138,0.15); color: var(--muted); }
+  .badge-warn { background: rgba(234,179,8,0.15); color: #fbbf24; }
+  .actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+  .btn-sm { padding: 0.5rem 0.9rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-family: inherit; text-decoration: none; }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent-light); }
+  .btn-sm.danger { color: #f87171; border-color: rgba(239,68,68,0.3); }
+  .btn-sm.danger:hover { background: rgba(239,68,68,0.1); }
+
+  .empty-state { background: var(--bg2); border: 2px dashed var(--border); border-radius: 12px; padding: 3rem 2rem; text-align: center; }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 1rem; }
+  .empty-state h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .empty-state p { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+  /* Modal for create/edit */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; padding: 2rem; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .modal-subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+  .form-group { margin-bottom: 1.25rem; }
+  label { display: block; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 0.5rem; }
+  input[type="text"], select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1rem; color: var(--text); font-size: 0.9rem; font-family: inherit; }
+  input[type="text"]:focus, select:focus { outline: none; border-color: var(--accent); }
+  .help-text { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; line-height: 1.5; }
+  .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+  .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 0.7rem 1.25rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .inline-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent-light); padding: 0.55rem 0.9rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; font-family: inherit; margin-left: 0.5rem; }
+  .inline-btn:hover { background: rgba(37,99,235,0.1); }
+  .fetch-status { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <div class="brand"><img src="/static/img/autoclip_mark.png" alt="AutoClip"><span class="brand-text">Auto<span class="accent">Clip</span></span></div>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/channels">Channels</a>
+    <a href="/audio" class="active">Audio</a>
+    <a href="/ads">Ad Library</a>
+    <a href="/thumbnails">Thumbnails</a>
+    <a href="/account">Account</a>
+    {% if current_user.role == 'admin' %}<a href="/admin/users">Admin</a>{% endif %}
+  </div>
+  <div class="nav-user">
+    {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
+    <span>{{ current_user.name or current_user.email }}</span>
+    <a href="/logout" style="color: var(--muted); font-size: 0.8rem;">(sign out)</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Audio Sync</h1>
+      <p class="subtitle">Automatically sync YouTube episodes to Transistor.</p>
+    </div>
+    <button class="btn-primary" onclick="openCreateModal()">+ New Sync Config</button>
+  </div>
+
+  {% if configs %}
+    {% for c in configs %}
+    <div class="config-card">
+      <div class="config-header">
+        <div class="config-name">{{ c.name }}</div>
+        <div class="badges">
+          {% if c.is_active %}<span class="badge badge-active">Active</span>{% else %}<span class="badge badge-inactive">Inactive</span>{% endif %}
+          {% if not c.source_playlist_id %}<span class="badge badge-warn">No Playlist Set</span>{% endif %}
+        </div>
+      </div>
+      <div class="config-meta">
+        Source YouTube channel: <code>{{ c.source_youtube_channel_id }}</code><br>
+        Playlist ID: {% if c.source_playlist_id %}<code>{{ c.source_playlist_id }}</code>{% else %}<span style="color:#fbbf24;">not set — edit to add</span>{% endif %}<br>
+        Destination: Transistor show <code>{{ c.destination_show_id }}</code>{% if c.destination_show_name %} — {{ c.destination_show_name }}{% endif %}<br>
+        {% if c.last_synced_at %}Last synced: {{ c.last_synced_at }}{% else %}Never synced.{% endif %}
+        {% if current_user.role == 'admin' and c.owner_email %}<br><em>Owner: {{ c.owner_email }}</em>{% endif %}
+      </div>
+      <div class="actions">
+        <button class="btn-sm" onclick='openEditModal({{ c|tojson }})'>Edit</button>
+        <button class="btn-sm" onclick="toggleActive({{ c.id }}, {{ 'false' if c.is_active else 'true' }})">{% if c.is_active %}Deactivate{% else %}Activate{% endif %}</button>
+        <button class="btn-sm danger" onclick="deleteConfig({{ c.id }})">Delete</button>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="empty-state">
+    <div class="icon">🎙️</div>
+    <h3>No audio sync configs yet</h3>
+    <p>Set up your first sync to automatically push YouTube episodes to Transistor.</p>
+    <button class="btn-primary" onclick="openCreateModal()">+ Create Your First Sync</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 id="modal-title">New Audio Sync</h2>
+    <p class="modal-subtitle">Watch a YouTube playlist and push new videos to Transistor as podcast episodes.</p>
+
+    <div class="form-group">
+      <label>Sync Name</label>
+      <input type="text" id="f-name" placeholder="e.g. ACC Football Addiction">
+      <div class="help-text">A friendly label so you can find this later.</div>
+    </div>
+
+    <div class="form-group">
+      <label>Source YouTube Channel</label>
+      <select id="f-channel">
+        <option value="">— Choose a channel —</option>
+        {% for ch in channels %}<option value="{{ ch.id }}" data-yt-id="{{ ch.youtube_channel_id }}">{{ ch.title }}</option>{% endfor %}
+      </select>
+      <div class="help-text">Must be a channel you've already connected on the <a href="/channels" style="color: var(--accent-light);">Channels</a> page.</div>
+    </div>
+
+    <div class="form-group">
+      <label>YouTube Playlist ID</label>
+      <input type="text" id="f-playlist" placeholder="PLxxxxxxxxxxxxxxxxxx">
+      <div class="help-text">Create a "Podcast Episodes" playlist on your YouTube channel and paste its ID here. Only videos in this playlist will be synced.</div>
+    </div>
+
+    <div class="form-group">
+      <label>Transistor API Key</label>
+      <input type="text" id="f-apikey" placeholder="Your Transistor API key">
+      <button class="inline-btn" type="button" onclick="fetchShows()">Load shows</button>
+      <div class="help-text">Find your key at <a href="https://dashboard.transistor.fm/account" style="color: var(--accent-light);" target="_blank">dashboard.transistor.fm/account</a>. Click "Load shows" to populate the dropdown below.</div>
+      <div class="fetch-status" id="fetch-status"></div>
+    </div>
+
+    <div class="form-group">
+      <label>Transistor Show</label>
+      <select id="f-show">
+        <option value="">— Load shows first —</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" type="button" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" id="save-btn" type="button" onclick="saveConfig()">Save Config</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let editingId = null;
+
+function openCreateModal() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'New Audio Sync';
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-channel').value = '';
+  document.getElementById('f-playlist').value = '';
+  document.getElementById('f-apikey').value = '';
+  document.getElementById('f-show').innerHTML = '<option value="">— Load shows first —</option>';
+  document.getElementById('fetch-status').textContent = '';
+  document.getElementById('modal').classList.add('open');
+}
+
+function openEditModal(cfg) {
+  editingId = cfg.id;
+  document.getElementById('modal-title').textContent = 'Edit ' + cfg.name;
+  document.getElementById('f-name').value = cfg.name || '';
+  // channel select: find matching option by youtube_channel_id
+  const chanSel = document.getElementById('f-channel');
+  for (const opt of chanSel.options) {
+    if (opt.dataset.ytId === cfg.source_youtube_channel_id) { chanSel.value = opt.value; break; }
+  }
+  document.getElementById('f-playlist').value = cfg.source_playlist_id || '';
+  document.getElementById('f-apikey').value = cfg.destination_api_key || '';
+  document.getElementById('f-show').innerHTML = '<option value="' + cfg.destination_show_id + '">' + (cfg.destination_show_name || cfg.destination_show_id) + '</option>';
+  document.getElementById('fetch-status').textContent = '';
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function fetchShows() {
+  const apiKey = document.getElementById('f-apikey').value.trim();
+  const status = document.getElementById('fetch-status');
+  if (!apiKey) { status.textContent = 'Enter your API key first.'; return; }
+  status.textContent = 'Loading...';
+  try {
+    const r = await fetch('/api/audio/transistor/shows', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey })
+    });
+    const data = await r.json();
+    if (!r.ok) { status.textContent = 'Failed: ' + (data.error || 'unknown'); return; }
+    const sel = document.getElementById('f-show');
+    sel.innerHTML = '<option value="">— Select a show —</option>';
+    for (const s of data.shows) {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = s.title;
+      o.dataset.title = s.title;
+      sel.appendChild(o);
+    }
+    status.textContent = data.shows.length + ' shows loaded.';
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function saveConfig() {
+  const showSel = document.getElementById('f-show');
+  const selectedShow = showSel.options[showSel.selectedIndex];
+  const payload = {
+    name: document.getElementById('f-name').value.trim(),
+    channel_id: parseInt(document.getElementById('f-channel').value) || null,
+    source_playlist_id: document.getElementById('f-playlist').value.trim(),
+    destination_api_key: document.getElementById('f-apikey').value.trim(),
+    destination_show_id: showSel.value,
+    destination_show_name: selectedShow ? (selectedShow.dataset.title || selectedShow.textContent) : '',
+  };
+
+  const url = editingId ? `/api/audio/configs/${editingId}` : '/api/audio/configs';
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await r.json();
+  if (!r.ok) { alert('Save failed: ' + (data.error || 'unknown')); return; }
+  closeModal();
+  window.location.reload();
+}
+
+async function toggleActive(id, activate) {
+  await fetch(`/api/audio/configs/${id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_active: activate })
+  });
+  window.location.reload();
+}
+
+async function deleteConfig(id) {
+  if (!confirm('Delete this sync config? Synced episode records are also removed.')) return;
+  await fetch(`/api/audio/configs/${id}/delete`, { method: 'POST' });
+  window.location.reload();
+}
+</script>
+
+</body>
+</html>

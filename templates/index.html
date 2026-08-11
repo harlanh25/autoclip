@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --accent-dark: #1d4ed8;
+    --bg: #07070f; --bg2: #0e0e1a; --bg3: #14141f;
+    --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav {
+    background: rgba(7,7,15,0.85); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border); padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px; position: sticky; top: 0; z-index: 100;
+  }
+  .nav-left { display: flex; align-items: center; gap: 2rem; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+  .brand-text .accent { color: var(--accent-light); }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: color 0.2s; }
+  nav a:hover { color: var(--text); }
+  nav a.active { color: var(--text); }
+  .nav-user { display: flex; align-items: center; gap: 0.75rem; color: var(--muted); font-size: 0.85rem; }
+  .nav-user img { height: 28px; width: 28px; border-radius: 50%; }
+  .logout-link { color: var(--muted); font-size: 0.8rem; }
+
+  .hero { max-width: 860px; margin: 4rem auto 0; padding: 0 2rem; text-align: center; }
+  .hero-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(37,99,235,0.12); border: 1px solid rgba(37,99,235,0.3); color: var(--accent-light); font-size: 0.8rem; font-weight: 600; padding: 0.35rem 0.875rem; border-radius: 20px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 1.5rem; }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; line-height: 1.08; letter-spacing: -0.03em; margin-bottom: 1.25rem; }
+  .hero h1 .highlight { background: linear-gradient(135deg, var(--accent-light) 0%, #60a5fa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { color: var(--muted); font-size: 1.05rem; line-height: 1.7; max-width: 580px; margin: 0 auto 2.5rem; }
+
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem; margin-bottom: 1.5rem; text-align: left; }
+  .card-title { font-size: 1rem; font-weight: 700; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+  .form-group { margin-bottom: 1.25rem; }
+  label { display: block; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 0.5rem; }
+  input[type="text"], select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 1rem; color: var(--text); font-size: 0.95rem; font-family: inherit; transition: border-color 0.2s; }
+  input[type="text"]:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+
+  .drop-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 2.5rem; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: rgba(37,99,235,0.05); }
+  .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+  .drop-zone p { color: var(--muted); font-size: 0.875rem; }
+  .drop-zone strong { color: var(--accent-light); }
+
+  .btn { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 0.9rem 2rem; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: 100%; transition: all 0.2s; font-family: inherit; }
+  .btn:hover { background: var(--accent-light); box-shadow: 0 4px 20px rgba(37,99,235,0.35); }
+  .btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; box-shadow: none; }
+
+  .progress { display: none; margin-top: 1rem; background: var(--bg3); border-radius: 6px; overflow: hidden; height: 4px; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-light)); width: 0%; transition: width 0.3s; }
+  .status { display: none; margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted); }
+
+  .no-channels-notice { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.3); border-radius: 10px; padding: 1rem 1.25rem; font-size: 0.875rem; color: #fbbf24; margin-bottom: 1.25rem; }
+  .no-channels-notice a { color: #fbbf24; text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <div class="brand">
+      <img src="/static/img/autoclip_mark.png" alt="AutoClip">
+      <span class="brand-text">Auto<span class="accent">Clip</span></span>
+    </div>
+    <a href="/dashboard" class="active">Dashboard</a>
+    <a href="/channels">Channels</a>
+    <a href="/audio">Audio</a>
+    <a href="/ads">Ad Library</a>
+    <a href="/thumbnails">Thumbnails</a>
+    {% if current_user and current_user.role == 'admin' %}
+    <a href="/admin/users">Admin</a>
+    {% endif %}
+  </div>
+  <div class="nav-user">
+    {% if current_user %}
+      {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
+      <span>{{ current_user.name or current_user.email }}</span>
+      <a href="/account" style="color: var(--muted); text-decoration: none; font-size: 0.85rem;">Account</a>
+      <a href="/logout" class="logout-link">(sign out)</a>
+    {% endif %}
+  </div>
+</nav>
+
+<div class="hero">
+
+  <div class="hero-eyebrow">⚡ Powered by AI</div>
+  <h1>Turn live shows into<br><span class="highlight">ready-to-publish clips</span></h1>
+  <p>Upload your recording, AutoClip transcribes it, detects segments, cuts clips, and publishes straight to YouTube.</p>
+
+  <div class="card">
+    <div class="card-title">🎬 Start a New Session</div>
+
+    {% if not channels %}
+    <div class="no-channels-notice">
+      <strong>No channels connected yet.</strong> You need to connect a YouTube channel before you can publish clips. <a href="/channels">Connect a channel →</a>
+    </div>
+    {% endif %}
+
+    <div class="form-group">
+      <label>Show Name</label>
+      <input type="text" id="show-name" placeholder="e.g. CFB Addiction Live — Aug 6" />
+    </div>
+
+    <div class="form-group">
+      <label>Publish To Channel</label>
+      <select id="channel-select">
+        <option value="">— Select a channel —</option>
+        {% for ch in channels %}
+          <option value="{{ ch.id }}">{{ ch.title }}{% if ch.user_role %} ({{ ch.user_role }}){% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Video File (MP4, MOV)</label>
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="video-file" accept="video/*" />
+        <div class="drop-icon">🎬</div>
+        <p><strong>Drop your video here</strong> or click to browse</p>
+        <p id="file-name" style="margin-top:0.5rem; color:var(--accent-light); font-weight:500;"></p>
+      </div>
+    </div>
+
+    <button class="btn" id="upload-btn" onclick="uploadVideo()">Upload & Start Processing</button>
+
+    <div class="progress" id="progress">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+</div>
+
+<script>
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('video-file');
+  const fileName = document.getElementById('file-name');
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) {
+      const size = (fileInput.files[0].size / 1024 / 1024).toFixed(1);
+      fileName.textContent = `${fileInput.files[0].name} (${size} MB)`;
+    }
+  });
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      const size = (file.size / 1024 / 1024).toFixed(1);
+      fileName.textContent = `${file.name} (${size} MB)`;
+    }
+  });
+
+  async function uploadVideo() {
+    const showName = document.getElementById('show-name').value;
+    const channelId = document.getElementById('channel-select').value;
+    const file = fileInput.files[0];
+    if (!file) { alert('Please select a video file first.'); return; }
+    if (!channelId) { alert('Please pick a channel to publish this session to.'); return; }
+
+    const btn = document.getElementById('upload-btn');
+    const progress = document.getElementById('progress');
+    const progressBar = document.getElementById('progress-bar');
+    const status = document.getElementById('status');
+
+    btn.disabled = true;
+    btn.textContent = 'Preparing...';
+    progress.style.display = 'block';
+    status.style.display = 'block';
+    status.textContent = 'Preparing chunked upload...';
+    progressBar.style.width = '0%';
+
+    const contentType = file.type || 'video/mp4';
+
+    try {
+      // 1. Init the chunked upload — server returns signed URLs for each chunk.
+      const initResp = await fetch('/api/upload/chunks/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          content_type: contentType,
+          file_size: file.size,
+        })
+      });
+      if (!initResp.ok) {
+        const err = await initResp.json().catch(() => ({}));
+        throw new Error('Failed to init upload: ' + (err.error || initResp.status));
+      }
+      const initData = await initResp.json();
+      const { session_id, chunk_size, chunk_count, chunks } = initData;
+
+      const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+      status.textContent = `Uploading ${sizeMB} MB in ${chunk_count} parallel chunks...`;
+      btn.textContent = 'Uploading...';
+
+      // 2. Upload chunks in parallel with a worker pool.
+      const PARALLELISM = 4;
+      const MAX_RETRIES = 3;
+      let completedChunks = 0;
+      let bytesUploaded = 0;
+      const totalBytes = file.size;
+      const chunkQueue = [...chunks];
+      const errors = [];
+
+      async function uploadOneChunk(chunk) {
+        const start = chunk.index * chunk_size;
+        const end = Math.min(start + chunk_size, file.size);
+        const blob = file.slice(start, end);
+        let attempt = 0;
+        while (attempt < MAX_RETRIES) {
+          attempt++;
+          try {
+            const resp = await fetch(chunk.upload_url, {
+              method: 'PUT',
+              body: blob,
+              // No Content-Type header (matches how we signed the URL server-side).
+            });
+            if (!resp.ok) {
+              throw new Error('HTTP ' + resp.status);
+            }
+            completedChunks++;
+            bytesUploaded += (end - start);
+            const pct = (bytesUploaded / totalBytes) * 100;
+            progressBar.style.width = pct + '%';
+            const done = (bytesUploaded / 1024 / 1024).toFixed(1);
+            status.textContent = `Uploading... ${Math.round(pct)}% (${done} / ${sizeMB} MB, chunk ${completedChunks}/${chunk_count})`;
+            return;
+          } catch (e) {
+            if (attempt >= MAX_RETRIES) {
+              throw new Error(`Chunk ${chunk.index} failed after ${MAX_RETRIES} attempts: ${e.message}`);
+            }
+            // Backoff before retry
+            await new Promise((r) => setTimeout(r, 500 * attempt));
+          }
+        }
+      }
+
+      async function worker() {
+        while (chunkQueue.length > 0) {
+          const chunk = chunkQueue.shift();
+          if (chunk === undefined) return;
+          try {
+            await uploadOneChunk(chunk);
+          } catch (e) {
+            errors.push(e.message);
+            // Empty the queue so other workers stop; we\'ll throw after Promise.all.
+            chunkQueue.length = 0;
+            throw e;
+          }
+        }
+      }
+
+      const workers = [];
+      for (let i = 0; i < PARALLELISM; i++) {
+        workers.push(worker());
+      }
+      try {
+        await Promise.all(workers);
+      } catch (e) {
+        throw new Error('Chunk upload failed: ' + (errors[0] || e.message));
+      }
+
+      // 3. Compose chunks -> final object, create session.
+      status.textContent = 'Finalizing (composing chunks)...';
+      const completeResp = await fetch('/api/upload/chunks/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id,
+          channel_id: parseInt(channelId),
+          show_name: showName || file.name,
+          content_type: contentType,
+          chunk_count: chunk_count,
+        })
+      });
+      if (!completeResp.ok) {
+        const err = await completeResp.json().catch(() => ({}));
+        throw new Error('Failed to finalize: ' + (err.error || completeResp.status));
+      }
+
+      status.textContent = '\u2713 Upload complete! Redirecting to studio...';
+      progressBar.style.width = '100%';
+      setTimeout(() => { window.location.href = '/studio/' + session_id; }, 800);
+    } catch (err) {
+      status.textContent = '\u2717 Upload failed: ' + err.message;
+      btn.disabled = false;
+      btn.textContent = 'Upload & Start Processing';
+    }
+  }
+</script>
+</body>
+</html>

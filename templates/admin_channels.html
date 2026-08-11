@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Channels — AutoClip Admin</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --bg: #07070f;
+    --bg2: #0e0e1a; --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav { background: rgba(7,7,15,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .nav-left { display: flex; align-items: center; gap: 2rem; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-text .accent { color: var(--accent-light); }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-weight: 500; }
+  nav a:hover { color: var(--text); }
+  nav a.active { color: var(--text); }
+
+  .container { max-width: 1100px; margin: 3rem auto; padding: 0 2rem; }
+  h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; }
+  .tabs { display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .tab { padding: 0.75rem 0; font-size: 0.9rem; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .channel-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+  .channel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .channel-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.25rem; }
+  .channel-meta { color: var(--muted); font-size: 0.8rem; }
+  .badges { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .badge { font-size: 0.7rem; font-weight: 700; padding: 0.25rem 0.55rem; border-radius: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .badge-unclaimed { background: rgba(239,68,68,0.15); color: #f87171; }
+  .badge-long { background: rgba(52,168,83,0.15); color: #4ade80; }
+  .badge-short { background: rgba(234,179,8,0.15); color: #fbbf24; }
+
+  .section { border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem; }
+  .section h4 { font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.75rem; }
+  .assign-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.5rem 0.75rem; border-radius: 8px; font-family: inherit; font-size: 0.875rem; }
+  .btn-sm { padding: 0.5rem 0.9rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-family: inherit; }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent-light); }
+  .btn-sm.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-sm.primary:hover { background: var(--accent-light); }
+  .btn-sm.danger { color: #f87171; border-color: rgba(239,68,68,0.3); }
+  .btn-sm.danger:hover { background: rgba(239,68,68,0.1); }
+
+  .members-list { list-style: none; padding: 0; }
+  .members-list li { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+  .members-list li:last-child { border-bottom: none; }
+  .member-info { display: flex; align-items: center; gap: 0.5rem; }
+  .member-info img { height: 24px; width: 24px; border-radius: 50%; }
+  .role-tag { font-size: 0.7rem; color: var(--muted); font-family: monospace; padding: 0.15rem 0.5rem; background: var(--bg); border-radius: 8px; margin-left: 0.5rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <div class="brand"><img src="/static/img/autoclip_mark.png" alt="AutoClip"><span class="brand-text">Auto<span class="accent">Clip</span></span></div>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/channels">Channels</a>
+    <a href="/ads">Ad Library</a>
+    <a href="/thumbnails">Thumbnails</a>
+    <a href="/admin/users" class="active">Admin</a>
+  </div>
+</nav>
+
+<div class="container">
+  <h1>Admin — Channels</h1>
+  <p class="subtitle">Assign channel owners and manage member access.</p>
+
+  <div class="tabs">
+    <a href="/admin/users" class="tab">Users</a>
+    <a href="/admin/channels" class="tab active">Channels</a>
+  </div>
+
+  {% for ch in channels %}
+  <div class="channel-card">
+    <div class="channel-header">
+      <div>
+        <div class="channel-title">{{ ch.title }}</div>
+        <div class="channel-meta">
+          {{ ch.youtube_channel_id }} · handle: <code>{{ ch.handle or '—' }}</code>
+        </div>
+      </div>
+      <div class="badges">
+        {% if not ch.owner_user_id %}<span class="badge badge-unclaimed">UNCLAIMED</span>{% endif %}
+        {% if ch.long_uploads_enabled %}<span class="badge badge-long">Long OK</span>{% else %}<span class="badge badge-short">15min cap</span>{% endif %}
+      </div>
+    </div>
+
+    <div class="section">
+      <h4>Owner</h4>
+      {% if ch.owner %}
+        <div class="assign-row">
+          <div class="member-info">
+            {% if ch.owner.picture_url %}<img src="{{ ch.owner.picture_url }}" alt="">{% endif %}
+            <div><strong>{{ ch.owner.name or ch.owner.email }}</strong></div>
+          </div>
+        </div>
+      {% else %}
+        <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 0.75rem;">No owner assigned yet.</p>
+      {% endif %}
+      <div class="assign-row">
+        <select id="owner-select-{{ ch.id }}">
+          <option value="">— Assign to user —</option>
+          {% for u in users if u.is_approved %}
+            <option value="{{ u.id }}" {% if ch.owner and ch.owner.id == u.id %}selected{% endif %}>{{ u.email }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn-sm primary" onclick="setOwner({{ ch.id }})">Set as Owner</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h4>Members with access</h4>
+      {% if ch.members %}
+      <ul class="members-list">
+        {% for m in ch.members %}
+        <li>
+          <div class="member-info">
+            {% if m.picture_url %}<img src="{{ m.picture_url }}" alt="">{% endif %}
+            <span>{{ m.email }}</span>
+            <span class="role-tag">{{ m.channel_role }}</span>
+          </div>
+          {% if m.id != ch.owner_user_id %}
+            <button class="btn-sm danger" onclick="revoke({{ ch.id }}, {{ m.id }})">Revoke</button>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <p style="color: var(--muted); font-size: 0.85rem;">No members yet.</p>
+      {% endif %}
+      <div class="assign-row" style="margin-top: 0.75rem;">
+        <select id="grant-select-{{ ch.id }}">
+          <option value="">— Grant access to —</option>
+          {% for u in users if u.is_approved %}
+            <option value="{{ u.id }}">{{ u.email }}</option>
+          {% endfor %}
+        </select>
+        <select id="grant-role-{{ ch.id }}">
+          <option value="uploader">Uploader</option>
+          <option value="viewer">Viewer</option>
+        </select>
+        <button class="btn-sm" onclick="grant({{ ch.id }})">Grant</button>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if not channels %}
+  <div style="background: var(--bg2); border: 2px dashed var(--border); border-radius: 12px; padding: 3rem 2rem; text-align: center;">
+    <p style="color: var(--muted);">No channels registered yet. Users can connect one from the Channels page.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+async function setOwner(channelId) {
+  const userId = document.getElementById(`owner-select-${channelId}`).value;
+  if (!userId) { alert('Pick a user first.'); return; }
+  await fetch(`/api/admin/channels/${channelId}/owner`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ owner_user_id: parseInt(userId) })
+  });
+  window.location.reload();
+}
+async function grant(channelId) {
+  const userId = document.getElementById(`grant-select-${channelId}`).value;
+  const role = document.getElementById(`grant-role-${channelId}`).value;
+  if (!userId) { alert('Pick a user first.'); return; }
+  await fetch(`/api/admin/channels/${channelId}/grant`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ user_id: parseInt(userId), role })
+  });
+  window.location.reload();
+}
+async function revoke(channelId, userId) {
+  if (!confirm('Revoke this user\'s access to the channel?')) return;
+  await fetch(`/api/admin/channels/${channelId}/revoke`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ user_id: userId })
+  });
+  window.location.reload();
+}
+</script>
+
+</body>
+</html>

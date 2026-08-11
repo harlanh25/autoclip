@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ session.show_name or 'Clip Editor' }} — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --accent-dark: #1d4ed8;
+    --bg: #07070f; --bg2: #0e0e1a; --bg3: #14141f;
+    --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+    --success: #4ade80; --warn: #fbbf24; --danger: #f87171;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav { background: rgba(7,7,15,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .nav-left { display: flex; align-items: center; gap: 2rem; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-text .accent { color: var(--accent-light); }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-weight: 500; }
+  nav a:hover { color: var(--text); }
+  .nav-user { display: flex; align-items: center; gap: 0.75rem; color: var(--muted); font-size: 0.85rem; }
+  .nav-user img { height: 28px; width: 28px; border-radius: 50%; }
+
+  .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+  .session-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .session-header h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+  .session-header .meta { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+
+  .btn { padding: 0.75rem 1.25rem; border-radius: 10px; font-size: 0.9rem; font-weight: 600; border: none; cursor: pointer; font-family: inherit; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-light); }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+  .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .btn-sm { padding: 0.45rem 0.9rem; font-size: 0.8rem; }
+  .btn-big { padding: 0.9rem 1.75rem; font-size: 0.95rem; font-weight: 700; }
+
+  /* Execute-all progress banner */
+  .exec-banner { background: var(--bg2); border: 1px solid var(--accent); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; display: none; }
+  .exec-banner.active { display: block; }
+  .exec-banner .title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.5rem; }
+  .exec-banner .log { max-height: 200px; overflow-y: auto; font-family: 'SF Mono', Monaco, monospace; font-size: 0.8rem; color: var(--muted); line-height: 1.6; }
+  .exec-banner .log .ok { color: var(--success); }
+  .exec-banner .log .err { color: var(--danger); }
+
+  /* Segment card */
+  .segment { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 1.25rem; overflow: hidden; }
+  .segment-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .segment-num { display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; font-weight: 800; font-size: 0.75rem; width: 28px; height: 28px; border-radius: 50%; }
+  .segment-title-line { flex: 1; display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+  .segment-title-line .name { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .segment-body { padding: 1.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .field { margin-bottom: 1.25rem; }
+  .field-label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+  .field-label .label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  .field-label .actions { display: flex; gap: 0.35rem; }
+  .field-input, .field-textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 0.9rem; color: var(--text); font-size: 0.9rem; font-family: inherit; }
+  .field-textarea { min-height: 100px; resize: vertical; }
+  .field-input:focus, .field-textarea:focus { outline: none; border-color: var(--accent); }
+
+  .icon-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.7rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .icon-btn:hover { color: var(--accent-light); border-color: var(--accent); }
+
+  /* Timestamp row */
+  .ts-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+  .ts-row .ts-label { color: var(--muted); font-size: 0.75rem; font-weight: 600; width: 45px; }
+  .ts-input { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.45rem 0.7rem; color: var(--text); font-family: 'SF Mono', Monaco, monospace; font-size: 0.9rem; width: 95px; text-align: center; }
+  .ts-input:focus { outline: none; border-color: var(--accent); }
+  .nudge-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--muted); padding: 0.35rem 0.55rem; border-radius: 5px; font-size: 0.7rem; font-family: 'SF Mono', Monaco, monospace; cursor: pointer; font-weight: 700; min-width: 42px; }
+  .nudge-btn:hover { color: var(--accent-light); border-color: var(--accent); }
+  .duration { color: var(--muted); font-size: 0.8rem; font-family: 'SF Mono', Monaco, monospace; margin-left: auto; }
+
+  /* Clip preview */
+  .clip-preview { width: 100%; aspect-ratio: 16/9; background: var(--bg3); border-radius: 8px; margin-top: 0.5rem; }
+  .clip-preview video { width: 100%; height: 100%; border-radius: 8px; background: #000; }
+  .clip-empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.85rem; height: 100%; }
+
+  /* Thumbnail */
+  .thumb-preview { width: 100%; aspect-ratio: 16/9; background: var(--bg3); border-radius: 8px; overflow: hidden; margin-bottom: 0.5rem; }
+  .thumb-preview img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb-empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.85rem; height: 100%; }
+  .thumb-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+
+  /* Publish row */
+  .publish-row { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .publish-controls { display: flex; align-items: center; gap: 0.75rem; }
+  .privacy-select { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.55rem 0.9rem; color: var(--text); font-size: 0.85rem; font-family: inherit; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; padding: 2rem; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 1.75rem; max-width: 600px; width: 100%; }
+  .modal h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; }
+  .option-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem; cursor: pointer; transition: border-color 0.15s; font-size: 0.9rem; line-height: 1.5; }
+  .option-card:hover { border-color: var(--accent); background: rgba(37,99,235,0.05); }
+
+  .status { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; min-height: 1.1em; }
+  .status.error { color: var(--danger); }
+  .status.success { color: var(--success); }
+
+  .empty-clips { text-align: center; padding: 4rem 2rem; color: var(--muted); background: var(--bg2); border: 1px dashed var(--border); border-radius: 12px; }
+
+  /* YouTube Advanced Options */
+  .yt-advanced { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; margin-top: 0.75rem; overflow: hidden; }
+  .yt-advanced-toggle { width: 100%; padding: 0.65rem 1rem; background: transparent; border: none; color: var(--muted); font-family: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 0.4rem; }
+  .yt-advanced-toggle:hover { color: var(--text); }
+  .yt-advanced-body { padding: 1rem 1.25rem; display: none; border-top: 1px solid var(--border); }
+  .yt-advanced.open .yt-advanced-body { display: block; }
+  .yt-advanced.open .yt-advanced-toggle .caret { transform: rotate(90deg); }
+  .yt-advanced-toggle .caret { display: inline-block; transition: transform 0.15s; }
+  .yt-row { display: grid; grid-template-columns: 130px 1fr; gap: 0.75rem; align-items: center; margin-bottom: 0.75rem; }
+  .yt-row .yt-label { color: var(--muted); font-size: 0.75rem; font-weight: 600; }
+  .yt-row .yt-control { }
+  .yt-row .yt-input, .yt-row .yt-select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.7rem; color: var(--text); font-family: inherit; font-size: 0.85rem; }
+  .yt-checkboxes { max-height: 140px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; }
+  .yt-checkboxes label { display: block; font-size: 0.85rem; padding: 0.2rem 0; cursor: pointer; }
+  .yt-checkboxes label input { margin-right: 0.5rem; }
+  .yt-checkbox-single { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--muted); }
+
+  /* Reference image upload grid */
+  .ref-images-section { margin-top: 0.75rem; }
+  .ref-images-label { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 0.4rem; }
+  .ref-images-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; margin-bottom: 0.5rem; }
+  .ref-slot { position: relative; aspect-ratio: 1; background: var(--bg); border: 1px dashed var(--border); border-radius: 6px; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.2rem; }
+  .ref-slot.filled { border-style: solid; cursor: default; }
+  .ref-slot img { width: 100%; height: 100%; object-fit: cover; }
+  .ref-slot .remove-btn { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.75); border: none; color: white; width: 20px; height: 20px; border-radius: 50%; font-size: 0.7rem; cursor: pointer; line-height: 1; padding: 0; display: none; }
+  .ref-slot.filled .remove-btn { display: block; }
+  .ref-hint { color: var(--muted); font-size: 0.7rem; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <div class="brand"><img src="/static/img/autoclip_mark.png" alt="AutoClip"><span class="brand-text">Auto<span class="accent">Clip</span></span></div>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/channels">Channels</a>
+    <a href="/audio">Audio</a>
+    <a href="/ads">Ad Library</a>
+    <a href="/thumbnails">Thumbnails</a>
+    {% if current_user and current_user.role == 'admin' %}<a href="/admin/users">Admin</a>{% endif %}
+  </div>
+  <div class="nav-user">
+    {% if current_user %}
+      {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
+      <span>{{ current_user.name or current_user.email }}</span>
+      <a href="/account" style="color: var(--muted); text-decoration: none;">Account</a>
+      <a href="/logout" style="color: var(--muted); text-decoration: none;">(sign out)</a>
+    {% endif %}
+  </div>
+</nav>
+
+<div class="container">
+
+  <div class="session-header">
+    <div>
+      <h1>{{ session.show_name or 'Clip Editor' }}</h1>
+      <div class="meta">Session: <code>{{ session.id }}</code> · {{ session.segments|length }} segments</div>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+      <a href="/studio/{{ session.id }}" class="btn btn-secondary">← Back to Studio</a>
+      <button class="btn btn-primary btn-big" id="execute-all-btn" onclick="executeAll()">▶ Execute All ({{ session.segments|length }} clips)</button>
+    </div>
+  </div>
+
+  <div class="exec-banner" id="exec-banner">
+    <div class="title">Processing all clips...</div>
+    <div class="log" id="exec-log"></div>
+  </div>
+
+  {% if not session.segments %}
+    <div class="empty-clips">No segments yet. Go back to the studio to detect segments first.</div>
+  {% endif %}
+
+  {% for seg in session.segments %}
+  {% set idx = loop.index0 %}
+  <div class="segment" id="seg-{{ idx }}">
+    <div class="segment-header">
+      <div class="segment-title-line">
+        <span class="segment-num">{{ loop.index }}</span>
+        <span class="name" id="seg-{{ idx }}-name">{{ seg.title or 'Untitled segment' }}</span>
+      </div>
+    </div>
+
+    <div class="segment-body">
+      <div class="grid">
+
+        <!-- LEFT COLUMN: timestamps + clip preview + title/desc -->
+        <div>
+          <!-- Timestamp editor -->
+          <div class="field">
+            <div class="field-label">
+              <span class="label">Clip Timestamps (adjust before re-cutting)</span>
+            </div>
+            <div class="ts-row">
+              <span class="ts-label">Start</span>
+              <input type="text" class="ts-input" id="start-{{ idx }}" value="" data-seconds="{{ (seg.start_time or seg.start or 0) | float }}">
+              <button class="nudge-btn" onclick="nudge('start-{{ idx }}', -30)">-30s</button>
+              <button class="nudge-btn" onclick="nudge('start-{{ idx }}', -5)">-5s</button>
+              <button class="nudge-btn" onclick="nudge('start-{{ idx }}', 5)">+5s</button>
+              <button class="nudge-btn" onclick="nudge('start-{{ idx }}', 30)">+30s</button>
+            </div>
+            <div class="ts-row">
+              <span class="ts-label">End</span>
+              <input type="text" class="ts-input" id="end-{{ idx }}" value="" data-seconds="{{ (seg.end_time or seg.end or 0) | float }}">
+              <button class="nudge-btn" onclick="nudge('end-{{ idx }}', -30)">-30s</button>
+              <button class="nudge-btn" onclick="nudge('end-{{ idx }}', -5)">-5s</button>
+              <button class="nudge-btn" onclick="nudge('end-{{ idx }}', 5)">+5s</button>
+              <button class="nudge-btn" onclick="nudge('end-{{ idx }}', 30)">+30s</button>
+              <span class="duration" id="duration-{{ idx }}"></span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+              <button class="btn btn-primary btn-sm" onclick="recut({{ idx }})">Re-cut Clip</button>
+              <button class="btn btn-secondary btn-sm" onclick="saveSegment({{ idx }}, {})">Save Times</button>
+            </div>
+            <div class="status" id="cut-status-{{ idx }}"></div>
+          </div>
+
+          <!-- Clip preview -->
+          <div class="field">
+            <div class="field-label"><span class="label">Current Clip</span></div>
+            <div class="clip-preview">
+              {% if seg.clip_file %}
+              <video controls src="/clip-file/{{ seg.clip_file }}" preload="metadata"></video>
+              {% else %}
+              <div class="clip-empty">Clip not cut yet — click "Re-cut Clip" above</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Title -->
+          <div class="field">
+            <div class="field-label">
+              <span class="label">Title</span>
+              <div class="actions">
+                <button class="icon-btn" onclick="regenerateTitle({{ idx }})">✨ Regenerate</button>
+              </div>
+            </div>
+            <input type="text" class="field-input" id="title-{{ idx }}" value="{{ seg.title or '' }}" onblur="saveSegment({{ idx }}, {title: this.value})">
+          </div>
+
+          <!-- Description -->
+          <div class="field">
+            <div class="field-label">
+              <span class="label">Description</span>
+              <div class="actions">
+                <button class="icon-btn" onclick="regenerateDescription({{ idx }})">✨ Regenerate</button>
+              </div>
+            </div>
+            <textarea class="field-textarea" id="description-{{ idx }}" onblur="saveSegment({{ idx }}, {description: this.value})">{{ seg.description or '' }}</textarea>
+          </div>
+
+          <!-- AD SLOTS (Phase 3a per-clip) -->
+          <div class="field">
+            <div class="field-label">
+              <span class="label">Ad Slots</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
+              <div>
+                <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">Intro (plays first)</div>
+                <select class="ad-select" id="intro-ad-{{ idx }}" data-segment="{{ idx }}" data-role="intro" data-current="{{ seg.intro_ad_id or '' }}" onchange="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+                  <option value="">Loading…</option>
+                </select>
+              </div>
+              <div>
+                <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">Outro (plays last)</div>
+                <select class="ad-select" id="outro-ad-{{ idx }}" data-segment="{{ idx }}" data-role="outro" data-current="{{ seg.outro_ad_id or '' }}" onchange="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+                  <option value="">Loading…</option>
+                </select>
+              </div>
+              <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 130px;gap:.5rem;align-items:end;">
+                <div>
+                  <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">Mid-clip (inserted mid-way)</div>
+                  <select class="ad-select" id="mid-ad-{{ idx }}" data-segment="{{ idx }}" data-role="mid" data-current="{{ seg.mid_ad_id or '' }}" onchange="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+                    <option value="">Loading…</option>
+                  </select>
+                </div>
+                <div>
+                  <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">At (sec)</div>
+                  <input type="text" id="mid-ad-pos-{{ idx }}" placeholder="auto" value="{{ seg.mid_ad_position_sec or '' }}" data-segment="{{ idx }}" onblur="window.__saveSegmentAds({{ idx }})" style="width:100%;padding:.5rem;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+                </div>
+              </div>
+            </div>
+            <div class="status" id="ads-status-{{ idx }}" style="font-size:.72rem;color:var(--muted);margin-top:.4rem;min-height:1em;"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: thumbnail -->
+        <div>
+          <div class="field">
+            <div class="field-label"><span class="label">Thumbnail</span></div>
+            <div class="thumb-preview">
+              {% if seg.thumbnail_url %}
+              <img src="{{ seg.thumbnail_url }}" alt="" id="thumb-img-{{ idx }}">
+              {% else %}
+              <div class="thumb-empty" id="thumb-img-{{ idx }}-empty">No thumbnail yet</div>
+              {% endif %}
+            </div>
+
+            <!-- REF IMAGES -->
+            <div class="ref-images-section">
+              <div class="ref-images-label">Reference Images (up to 5)</div>
+              <div class="ref-hint">People, logos, or objects to appear in the thumbnail. AI will use them as visual references.</div>
+              <div class="ref-images-grid" id="ref-grid-{{ idx }}">
+                <div class="ref-slot" data-slot="0" onclick="pickRefImage({{ idx }}, 0)"><span>+</span><button class="remove-btn" onclick="removeRefImage(event, {{ idx }}, 0)">×</button></div>
+                <div class="ref-slot" data-slot="1" onclick="pickRefImage({{ idx }}, 1)"><span>+</span><button class="remove-btn" onclick="removeRefImage(event, {{ idx }}, 1)">×</button></div>
+                <div class="ref-slot" data-slot="2" onclick="pickRefImage({{ idx }}, 2)"><span>+</span><button class="remove-btn" onclick="removeRefImage(event, {{ idx }}, 2)">×</button></div>
+                <div class="ref-slot" data-slot="3" onclick="pickRefImage({{ idx }}, 3)"><span>+</span><button class="remove-btn" onclick="removeRefImage(event, {{ idx }}, 3)">×</button></div>
+                <div class="ref-slot" data-slot="4" onclick="pickRefImage({{ idx }}, 4)"><span>+</span><button class="remove-btn" onclick="removeRefImage(event, {{ idx }}, 4)">×</button></div>
+              </div>
+              <input type="file" accept="image/*" style="display: none;" id="ref-picker-{{ idx }}">
+            </div>
+            <div class="field-label" style="margin-top: 0.75rem;">
+              <span class="label">Guidance (steer the AI)</span>
+            </div>
+            <textarea class="field-textarea" id="thumb-guidance-{{ idx }}" placeholder="e.g. dramatic sports action shot, wide angle, orange and blue tones, focus on quarterback&#10;&#10;Leave blank for a default sports style." style="min-height: 80px;"></textarea>
+
+            <div class="thumb-actions">
+              <button class="btn btn-primary btn-sm" onclick="generateThumbnail({{ idx }})">🎨 Generate with AI</button>
+              <label class="btn btn-secondary btn-sm" style="cursor: pointer;">
+                📎 Upload Custom
+                <input type="file" accept="image/*" style="display: none;" onchange="uploadThumbnail({{ idx }}, this)">
+              </label>
+            </div>
+            <div class="status" id="thumb-status-{{ idx }}"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Publish row -->
+
+      <!-- YouTube advanced publish options -->
+      <div class="yt-advanced" id="yt-adv-{{ idx }}">
+        <button class="yt-advanced-toggle" onclick="toggleYtAdvanced({{ idx }})" type="button">
+          <span class="caret">▸</span> Advanced YouTube Options
+        </button>
+        <div class="yt-advanced-body">
+
+          <div class="yt-row">
+            <div class="yt-label">Playlists</div>
+            <div class="yt-control">
+              <div class="yt-checkboxes" id="yt-playlists-{{ idx }}">
+                <div style="color: var(--muted); font-size: 0.8rem;">Click above to load playlists...</div>
+              </div>
+              <button class="icon-btn" style="margin-top: 0.5rem;" onclick="loadPlaylistsFor({{ idx }})" type="button">🔄 Load / Refresh Playlists</button>
+            </div>
+          </div>
+
+          <div class="yt-row">
+            <div class="yt-label">Category</div>
+            <div class="yt-control">
+              <select class="yt-select" id="yt-category-{{ idx }}">
+                <option value="17" selected>Sports</option>
+                <option value="24">Entertainment</option>
+                <option value="25">News &amp; Politics</option>
+                <option value="27">Education</option>
+                <option value="20">Gaming</option>
+                <option value="22">People &amp; Blogs</option>
+                <option value="23">Comedy</option>
+                <option value="10">Music</option>
+                <option value="19">Travel &amp; Events</option>
+                <option value="28">Science &amp; Technology</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="yt-row">
+            <div class="yt-label">Tags</div>
+            <div class="yt-control">
+              <input type="text" class="yt-input" id="yt-tags-{{ idx }}" placeholder="fsu football, college football, seminoles">
+              <div style="color: var(--muted); font-size: 0.7rem; margin-top: 0.25rem;">Comma-separated. First few tags matter most.</div>
+            </div>
+          </div>
+
+          <div class="yt-row">
+            <div class="yt-label">Made for Kids</div>
+            <div class="yt-control">
+              <label class="yt-checkbox-single">
+                <input type="checkbox" id="yt-mfk-{{ idx }}">
+                <span>This video is directed at children (COPPA)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="yt-row">
+            <div class="yt-label">Schedule Publish</div>
+            <div class="yt-control">
+              <input type="datetime-local" class="yt-input" id="yt-schedule-{{ idx }}">
+              <div style="color: var(--muted); font-size: 0.7rem; margin-top: 0.25rem;">Leave blank to publish immediately at privacy level selected below.</div>
+            </div>
+          </div>
+
+          <div class="yt-row">
+            <div class="yt-label">Monetize</div>
+            <div class="yt-control">
+              <label class="yt-checkbox-single">
+                <input type="checkbox" id="yt-monetize-{{ idx }}">
+                <span>Enable ads on this video (channel must be in YPP)</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="color: var(--muted); font-size: 0.7rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
+            <strong>Not settable via API:</strong> end screens, cards, comment/rating restrictions. Set defaults in YouTube Studio.
+          </div>
+        </div>
+      </div>
+
+      <div class="publish-row">
+        <div class="publish-controls">
+          <label style="color: var(--muted); font-size: 0.8rem;">Privacy:</label>
+          <select class="privacy-select" id="privacy-{{ idx }}">
+            <option value="private" selected>Private</option>
+            <option value="unlisted">Unlisted</option>
+            <option value="public">Public</option>
+          </select>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-secondary btn-sm" onclick="insertAd({{ idx }})">➕ Insert Ad</button>
+          <button class="btn btn-primary" onclick="publishAsync({{ idx }})">🚀 Publish to YouTube</button>
+        </div>
+      </div>
+      <div class="status" id="publish-status-{{ idx }}"></div>
+    </div>
+  </div>
+  {% endfor %}
+
+</div>
+
+<!-- Options modal (title / description regeneration) -->
+<div class="modal-overlay" id="options-modal">
+  <div class="modal">
+    <h2 id="options-modal-title">Choose an option</h2>
+    <div id="options-modal-list"></div>
+    <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+      <button class="btn btn-secondary btn-sm" onclick="closeOptionsModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ------------------- utilities -------------------
+  function fmtDuration(sec) {
+    sec = Math.max(0, Math.round(sec));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
+
+  function secondsToDisplay(sec) {
+    // Format as MM:SS if < 1 hour, else HH:MM:SS
+    sec = Math.max(0, Math.round(sec));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
+
+  function displayToSeconds(str) {
+    // Parse MM:SS or HH:MM:SS (or a bare number)
+    if (!str) return 0;
+    str = String(str).trim();
+    if (!str.includes(':')) return parseFloat(str) || 0;
+    const parts = str.split(':').map(p => parseInt(p, 10) || 0);
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+  }
+
+  function getSeconds(inputEl) {
+    // Prefer the parsed input value; fall back to data-seconds if empty
+    const parsed = displayToSeconds(inputEl.value);
+    if (parsed > 0 || inputEl.value.trim() !== '') return parsed;
+    return parseFloat(inputEl.dataset.seconds || '0') || 0;
+  }
+
+  function updateDuration(idx) {
+    const start = getSeconds(document.getElementById('start-'+idx));
+    const end = getSeconds(document.getElementById('end-'+idx));
+    const el = document.getElementById('duration-'+idx);
+    if (el) el.textContent = 'Duration: ' + fmtDuration(end - start);
+  }
+
+  // Initialize: convert data-seconds to display format for each ts-input
+  document.querySelectorAll('.ts-input').forEach((input) => {
+    const secs = parseFloat(input.dataset.seconds || '0');
+    input.value = secondsToDisplay(secs);
+  });
+  document.querySelectorAll('.segment').forEach((seg) => {
+    const idx = parseInt(seg.id.split('-')[1]);
+    updateDuration(idx);
+    document.getElementById('start-'+idx).addEventListener('input', () => updateDuration(idx));
+    document.getElementById('end-'+idx).addEventListener('input', () => updateDuration(idx));
+  });
+
+  function nudge(elId, delta) {
+    const el = document.getElementById(elId);
+    const current = getSeconds(el);
+    const next = Math.max(0, current + delta);
+    el.value = secondsToDisplay(next);
+    el.dispatchEvent(new Event('input'));
+  }
+
+  function setStatus(id, msg, type='') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'status ' + type;
+    el.textContent = msg;
+  }
+
+  // ------------------- API calls -------------------
+  async function saveSegment(idx, fields) {
+    const payload = { segment_index: idx };
+    if (fields.title !== undefined) payload.title = fields.title;
+    if (fields.description !== undefined) payload.description = fields.description;
+    // Always include current start/end so a "save times" click works too
+    payload.start = getSeconds(document.getElementById('start-'+idx));
+    payload.end = getSeconds(document.getElementById('end-'+idx));
+
+    const r = await fetch('/api/update_segment/{{ session.id }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (r.ok) {
+      if (fields.title !== undefined) {
+        document.getElementById('seg-'+idx+'-name').textContent = fields.title || 'Untitled segment';
+      }
+      setStatus('cut-status-'+idx, 'Saved.', 'success');
+      setTimeout(() => setStatus('cut-status-'+idx, ''), 1500);
+    } else {
+      setStatus('cut-status-'+idx, 'Save failed.', 'error');
+    }
+  }
+
+  async function recut(idx) {
+    // Save times first, then re-cut
+    await saveSegment(idx, {});
+    setStatus('cut-status-'+idx, 'Cutting clip...');
+    const r = await fetch('/api/clip/{{ session.id }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ segment_index: idx })
+    });
+    if (r.ok) {
+      setStatus('cut-status-'+idx, 'Cut complete. Reloading preview...', 'success');
+      setTimeout(() => window.location.reload(), 800);
+    } else {
+      const j = await r.json().catch(() => ({}));
+      setStatus('cut-status-'+idx, 'Cut failed: ' + (j.error || 'unknown'), 'error');
+    }
+  }
+
+  let currentRegenTarget = null;
+  function openOptionsModal(title, options, targetInputId, targetSegIdx, targetField) {
+    document.getElementById('options-modal-title').textContent = title;
+    const list = document.getElementById('options-modal-list');
+    list.innerHTML = '';
+    options.forEach((opt) => {
+      const card = document.createElement('div');
+      card.className = 'option-card';
+      card.textContent = opt;
+      card.onclick = () => {
+        document.getElementById(targetInputId).value = opt;
+        const fields = {};
+        fields[targetField] = opt;
+        saveSegment(targetSegIdx, fields);
+        if (targetField === 'title') {
+          document.getElementById('seg-'+targetSegIdx+'-name').textContent = opt;
+        }
+        closeOptionsModal();
+      };
+      list.appendChild(card);
+    });
+    document.getElementById('options-modal').classList.add('open');
+  }
+  function closeOptionsModal() {
+    document.getElementById('options-modal').classList.remove('open');
+  }
+
+  async function regenerateTitle(idx) {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    try {
+      const r = await fetch('/api/regenerate_title/{{ session.id }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ segment_index: idx })
+      });
+      const j = await r.json();
+      if (!r.ok) { alert('Regenerate failed: ' + (j.error || 'unknown')); return; }
+      // Take the first option, replace the title inline
+      const newTitle = (j.options && j.options[0]) || '';
+      document.getElementById('title-'+idx).value = newTitle;
+      document.getElementById('seg-'+idx+'-name').textContent = newTitle || 'Untitled segment';
+      // Save the change
+      saveSegment(idx, { title: newTitle });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+
+  async function regenerateDescription(idx) {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    try {
+      const r = await fetch('/api/regenerate_description/{{ session.id }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ segment_index: idx })
+      });
+      const j = await r.json();
+      if (!r.ok) { alert('Regenerate failed: ' + (j.error || 'unknown')); return; }
+      const newDesc = (j.options && j.options[0]) || '';
+      document.getElementById('description-'+idx).value = newDesc;
+      saveSegment(idx, { description: newDesc });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+
+
+  // Store reference images per segment (in-memory File objects until Generate is clicked)
+  const refImages = {};
+
+  function pickRefImage(idx, slot) {
+    const grid = document.getElementById('ref-grid-'+idx);
+    if (grid.querySelector(`[data-slot="${slot}"]`).classList.contains('filled')) return;
+    const picker = document.getElementById('ref-picker-'+idx);
+    picker.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!refImages[idx]) refImages[idx] = {};
+      refImages[idx][slot] = file;
+
+      // Show preview
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const slotEl = grid.querySelector(`[data-slot="${slot}"]`);
+        slotEl.innerHTML = `<img src="${ev.target.result}" alt=""><button class="remove-btn" onclick="removeRefImage(event, ${idx}, ${slot})">×</button>`;
+        slotEl.classList.add('filled');
+      };
+      reader.readAsDataURL(file);
+
+      picker.value = '';  // reset so the same file can be picked again
+    };
+    picker.click();
+  }
+
+  function removeRefImage(evt, idx, slot) {
+    evt.stopPropagation();
+    if (refImages[idx]) delete refImages[idx][slot];
+    const grid = document.getElementById('ref-grid-'+idx);
+    const slotEl = grid.querySelector(`[data-slot="${slot}"]`);
+    slotEl.innerHTML = `<span>+</span><button class="remove-btn" onclick="removeRefImage(event, ${idx}, ${slot})">×</button>`;
+    slotEl.classList.remove('filled');
+  }
+
+  async function generateThumbnail(idx) {
+    const guidance = document.getElementById('thumb-guidance-'+idx).value.trim();
+    const refs = refImages[idx] || {};
+    const refCount = Object.keys(refs).length;
+
+    setStatus('thumb-status-'+idx, refCount > 0
+      ? `Generating thumbnail with ${refCount} reference image${refCount > 1 ? 's' : ''} (30-90s)...`
+      : 'Generating thumbnail (30-60s)...');
+
+    let r;
+    if (refCount > 0) {
+      // Use multipart endpoint with reference images
+      const fd = new FormData();
+      fd.append('session_id', '{{ session.id }}');
+      fd.append('segment_index', idx);
+      fd.append('guidance', guidance);
+      let sentIdx = 0;
+      Object.keys(refs).sort().forEach(slot => {
+        fd.append('image_'+sentIdx, refs[slot]);
+        sentIdx++;
+      });
+      r = await fetch('/api/generate_thumbnail_with_refs', { method: 'POST', body: fd });
+    } else {
+      // Text-only
+      r = await fetch('/api/generate_thumbnail', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ session_id: '{{ session.id }}', segment_index: idx, guidance: guidance })
+      });
+    }
+
+    const j = await r.json();
+    if (r.ok && j.thumbnail_url) {
+      const preview = document.querySelector('#seg-'+idx+' .thumb-preview');
+      preview.innerHTML = '<img src="'+j.thumbnail_url+(j.thumbnail_url.indexOf('?')>=0?'&':'?')+'t='+Date.now()+'" alt="">';
+      setStatus('thumb-status-'+idx, 'Thumbnail ready.', 'success');
+    } else {
+      setStatus('thumb-status-'+idx, 'Failed: ' + (j.error || 'unknown'), 'error');
+    }
+  }
+
+  async function uploadThumbnail(idx, fileInput) {
+    if (!fileInput.files[0]) return;
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    fd.append('segment_index', idx);
+    setStatus('thumb-status-'+idx, 'Uploading...');
+    const r = await fetch('/api/upload_custom_thumbnail/{{ session.id }}', {
+      method: 'POST',
+      body: fd
+    });
+    const j = await r.json();
+    if (r.ok) {
+      const preview = document.querySelector('#seg-'+idx+' .thumb-preview');
+      preview.innerHTML = '<img src="'+j.thumbnail_url+(j.thumbnail_url.indexOf('?')>=0?'&':'?')+'t='+Date.now()+'" alt="">';
+      setStatus('thumb-status-'+idx, 'Uploaded.', 'success');
+    } else {
+      setStatus('thumb-status-'+idx, 'Upload failed: ' + (j.error || 'unknown'), 'error');
+    }
+    fileInput.value = '';
+  }
+
+  async function insertAd(idx) {
+    if (!confirm('Insert an ad into this clip? (This re-encodes so takes ~1 min)')) return;
+    setStatus('publish-status-'+idx, 'Inserting ad...');
+    const r = await fetch('/api/insert_ad/{{ session.id }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ segment_index: idx })
+    });
+    if (r.ok) {
+      setStatus('publish-status-'+idx, 'Ad inserted.', 'success');
+      setTimeout(() => window.location.reload(), 800);
+    } else {
+      const j = await r.json().catch(() => ({}));
+      setStatus('publish-status-'+idx, 'Failed: ' + (j.error || 'unknown'), 'error');
+    }
+  }
+
+
+  function toggleYtAdvanced(idx) {
+    document.getElementById('yt-adv-'+idx).classList.toggle('open');
+  }
+
+  async function loadPlaylistsFor(idx) {
+    const container = document.getElementById('yt-playlists-'+idx);
+    container.innerHTML = '<div style="color: var(--muted); font-size: 0.8rem;">Loading...</div>';
+    try {
+      const channelPk = {{ session.channel_id or 'null' }};
+      if (!channelPk) {
+        container.innerHTML = '<div style="color: var(--danger); font-size: 0.8rem;">Session has no channel — can\u2019t load playlists.</div>';
+        return;
+      }
+      const r = await fetch('/api/youtube/playlists/' + channelPk);
+      const j = await r.json();
+      if (!r.ok || !j.playlists) {
+        container.innerHTML = '<div style="color: var(--danger); font-size: 0.8rem;">Failed: ' + (j.error || 'unknown') + '</div>';
+        return;
+      }
+      if (j.playlists.length === 0) {
+        container.innerHTML = '<div style="color: var(--muted); font-size: 0.8rem;">No playlists found on this channel.</div>';
+        return;
+      }
+      let html = '';
+      j.playlists.forEach(pl => {
+        html += `<label><input type="checkbox" value="${pl.id}"> ${pl.title}</label>`;
+      });
+      container.innerHTML = html;
+    } catch (e) {
+      container.innerHTML = '<div style="color: var(--danger); font-size: 0.8rem;">Error: ' + e.message + '</div>';
+    }
+  }
+
+  function collectYtSettings(idx) {
+    // Playlists — checked checkboxes
+    const playlistIds = Array.from(
+      document.querySelectorAll('#yt-playlists-'+idx+' input[type="checkbox"]:checked')
+    ).map(cb => cb.value);
+    // Schedule — convert datetime-local (local time) to ISO 8601 UTC-Z
+    const schedRaw = document.getElementById('yt-schedule-'+idx).value;
+    let publishAt = '';
+    if (schedRaw) {
+      try {
+        publishAt = new Date(schedRaw).toISOString();
+      } catch (e) { publishAt = ''; }
+    }
+    return {
+      category_id: document.getElementById('yt-category-'+idx).value || '17',
+      tags: document.getElementById('yt-tags-'+idx).value || '',
+      made_for_kids: document.getElementById('yt-mfk-'+idx).checked,
+      publish_at: publishAt,
+      monetize: document.getElementById('yt-monetize-'+idx).checked,
+      playlist_ids: playlistIds,
+    };
+  }
+
+  async function publish(idx) {
+    const privacy = document.getElementById('privacy-'+idx).value;
+    const ytSettings = collectYtSettings(idx);
+    setStatus('publish-status-'+idx, 'Publishing to YouTube...');
+    const r = await fetch('/api/upload_youtube/{{ session.id }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        segment_index: idx,
+        privacy_status: privacy,
+        category_id: ytSettings.category_id,
+        tags: ytSettings.tags,
+        made_for_kids: ytSettings.made_for_kids,
+        publish_at: ytSettings.publish_at,
+        monetize: ytSettings.monetize,
+        playlist_ids: ytSettings.playlist_ids,
+      })
+    });
+    const j = await r.json();
+    if (r.ok) {
+      setStatus('publish-status-'+idx, 'Published! Video ID: ' + (j.video_id || 'ok'), 'success');
+    } else {
+      setStatus('publish-status-'+idx, 'Publish failed: ' + (j.error || 'unknown'), 'error');
+    }
+  }
+
+  // ------------------- Execute All -------------------
+  async function executeAll() {
+    const btn = document.getElementById('execute-all-btn');
+    const banner = document.getElementById('exec-banner');
+    const log = document.getElementById('exec-log');
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    banner.classList.add('active');
+    log.innerHTML = '<div>Starting batch operation...</div>';
+
+    try {
+      const r = await fetch('/api/execute_all/{{ session.id }}', { method: 'POST' });
+      const j = await r.json();
+      if (r.ok) {
+        // __AUTOCLIP_EXECALL_SMART_RELOAD__
+        const s = j.summary || {};
+        log.innerHTML += `<div class="ok">✓ Cut ${s.cut || 0} clips</div>`;
+        log.innerHTML += `<div class="ok">✓ Generated ${s.titles || 0} titles</div>`;
+        log.innerHTML += `<div class="ok">✓ Generated ${s.descriptions || 0} descriptions</div>`;
+        log.innerHTML += `<div class="ok">✓ Generated ${s.thumbnails || 0} thumbnails</div>`;
+        const errs = s.errors || [];
+        errs.forEach(e => { log.innerHTML += `<div class="err">✗ ${e}</div>`; });
+        btn.disabled = false;
+        btn.textContent = '▶ Execute All';
+        if (errs.length === 0) {
+          // Clean run — auto-reload so the new clips/thumbs render
+          log.innerHTML += '<div>Reloading page...</div>';
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          // Errors present — leave log visible with a Close/Reload option
+          log.innerHTML += `<div style="margin-top:.75rem;"><button onclick="window.location.reload()" style="padding:.35rem .75rem;background:var(--accent, #4af);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:.85rem;font-weight:600;">Reload page</button> <button onclick="document.getElementById('exec-banner').classList.remove('active')" style="margin-left:.4rem;padding:.35rem .75rem;background:transparent;border:1px solid var(--border, #333);border-radius:5px;color:var(--fg, #eee);cursor:pointer;font-size:.85rem;">Dismiss</button></div>`;
+        }
+      } else {
+        log.innerHTML += `<div class="err">Failed: ${j.error || 'unknown'}</div>`;
+        btn.disabled = false;
+        btn.textContent = '▶ Execute All';
+      }
+    } catch (e) {
+      log.innerHTML += `<div class="err">Error: ${e.message}</div>`;
+      btn.disabled = false;
+      btn.textContent = '▶ Execute All';
+    }
+  }
+</script>
+
+</body>
+
+
+<script>
+// __AUTOCLIP_CLIP_ADS_V3__
+(function(){
+  const CHANNEL_PK = {{ session.channel_id or 'null' }};
+  const SESSION_ID = "{{ session.id }}";
+  const selects = () => document.querySelectorAll('.ad-select');
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmtDur(sec) {
+    if (!sec && sec !== 0) return '';
+    const m = Math.floor(sec/60), s = Math.round(sec%60);
+    return ` (${m}:${String(s).padStart(2,'0')})`;
+  }
+
+  if (CHANNEL_PK == null) {
+    selects().forEach(sel => {
+      sel.innerHTML = '<option value="">— session has no channel —</option>';
+      sel.disabled = true;
+    });
+    return;
+  }
+
+  async function loadAdsAndPopulate() {
+    try {
+      const r = await fetch(`/api/ads/library?channel_id=${CHANNEL_PK}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const ads = data.ads || [];
+
+      selects().forEach(sel => {
+        const cur = sel.dataset.current || '';
+        const options = ['<option value="">— none —</option>']
+          .concat(ads.map(a =>
+            `<option value="${a.id}" ${String(a.id) === cur ? 'selected' : ''}>${esc(a.display_name)}${esc(fmtDur(a.duration_sec))}</option>`
+          ));
+        sel.innerHTML = options.join('');
+      });
+
+      if (!ads.length) {
+        selects().forEach(sel => {
+          sel.innerHTML = '<option value="">— no ads yet; upload on /ads —</option>';
+          sel.disabled = true;
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load ads for clip editor:', e);
+      selects().forEach(sel => {
+        sel.innerHTML = `<option value="">— load failed —</option>`;
+      });
+    }
+  }
+
+  window.__saveSegmentAds = async function(idx) {
+    const intro = document.getElementById(`intro-ad-${idx}`);
+    const outro = document.getElementById(`outro-ad-${idx}`);
+    const mid   = document.getElementById(`mid-ad-${idx}`);
+    const pos   = document.getElementById(`mid-ad-pos-${idx}`);
+    const status = document.getElementById(`ads-status-${idx}`);
+
+    const parseId = (v) => (v === '' || v == null) ? null : parseInt(v, 10);
+    const parsePos = (v) => {
+      const t = String(v || '').trim();
+      return t === '' ? null : parseFloat(t);
+    };
+
+    const body = {
+      intro_ad_id: parseId(intro.value),
+      outro_ad_id: parseId(outro.value),
+      mid_ad_id:   parseId(mid.value),
+      mid_ad_position_sec: parsePos(pos.value)
+    };
+
+    status.textContent = 'Saving…';
+    status.style.color = 'var(--muted)';
+    try {
+      const r = await fetch(`/api/sessions/${SESSION_ID}/segments/${idx}/ads`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+      }
+      // Update dataset.current so subsequent option-swaps preserve selection
+      intro.dataset.current = String(body.intro_ad_id || '');
+      outro.dataset.current = String(body.outro_ad_id || '');
+      mid.dataset.current = String(body.mid_ad_id || '');
+      status.textContent = '✓ saved';
+      status.style.color = 'var(--muted)';
+      setTimeout(() => { if (status.textContent === '✓ saved') status.textContent = ''; }, 1500);
+    } catch (e) {
+      status.textContent = 'Save failed: ' + (e.message || e);
+      status.style.color = '#f66';
+    }
+  };
+
+  loadAdsAndPopulate();
+})();
+</script>
+
+
+
+<script>
+// __AUTOCLIP_ASYNC_PUBLISH_V41__
+(function(){
+  const SESSION_ID = "{{ session.id }}";
+  const POLL_INTERVAL_MS = 3000;
+  const activeJobs = {};  // segment_idx -> job_id
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function ensureCard(idx) {
+    let card = document.getElementById('publish-card-' + idx);
+    if (card) return card;
+    // Find or create the publish status area for this segment
+    let host = document.getElementById('publish-status-' + idx);
+    if (!host) {
+      // If the sync path never rendered a status host, create one after the publish button
+      const btn = document.querySelector(`button[onclick*="publishAsync(${idx})"]`);
+      if (!btn) return null;
+      host = document.createElement('div');
+      host.id = 'publish-status-' + idx;
+      host.style.cssText = 'margin-top:.75rem;';
+      btn.parentNode.appendChild(host);
+    }
+    card = document.createElement('div');
+    card.id = 'publish-card-' + idx;
+    card.style.cssText = 'background:var(--card, #1a1a1a);border:1px solid var(--border, #333);border-radius:8px;padding:.85rem 1rem;margin-top:.5rem;font-size:.85rem;';
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+        <strong id="publish-card-title-${idx}">Publish queued</strong>
+        <span id="publish-card-status-${idx}" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted, #888);">pending</span>
+      </div>
+      <div style="background:var(--bg, #0a0a0a);height:8px;border-radius:4px;overflow:hidden;margin-bottom:.4rem;">
+        <div id="publish-card-bar-${idx}" style="height:100%;background:var(--primary, #4af);width:0%;transition:width .4s ease;"></div>
+      </div>
+      <div id="publish-card-stage-${idx}" style="color:var(--muted, #888);font-size:.78rem;">waiting for worker...</div>
+      <div id="publish-card-error-${idx}" style="color:#f66;font-size:.78rem;margin-top:.4rem;white-space:pre-wrap;display:none;"></div>
+      <div id="publish-card-result-${idx}" style="margin-top:.5rem;display:none;"></div>
+    `;
+    host.appendChild(card);
+    return card;
+  }
+
+  function stageLabel(stage) {
+    return ({
+      'loading_session':    'Loading session…',
+      'downloading_clip':   'Downloading clip from cloud…',
+      'composing_ads':      'Composing ads into video…',
+      'compose_complete':   'Composition complete',
+      'uploading_youtube':  'Uploading to YouTube…',
+      'saving':             'Saving…',
+      'complete':           'Complete',
+    }[stage] || stage || '');
+  }
+
+  function renderJob(job) {
+    const idx = job.segment_index;
+    const card = ensureCard(idx);
+    if (!card) return;
+    const st = document.getElementById(`publish-card-status-${idx}`);
+    const bar = document.getElementById(`publish-card-bar-${idx}`);
+    const stg = document.getElementById(`publish-card-stage-${idx}`);
+    const err = document.getElementById(`publish-card-error-${idx}`);
+    const res = document.getElementById(`publish-card-result-${idx}`);
+    const title = document.getElementById(`publish-card-title-${idx}`);
+
+    st.textContent = job.status;
+    bar.style.width = (job.progress_pct || 0) + '%';
+    stg.textContent = stageLabel(job.stage);
+
+    if (job.status === 'failed') {
+      title.textContent = 'Publish failed';
+      st.style.color = '#f66';
+      bar.style.background = '#a33';
+      err.style.display = 'block';
+      err.textContent = job.error || 'Unknown error';
+    } else if (job.status === 'done') {
+      title.textContent = '✓ Published to YouTube';
+      st.style.color = '#6f6';
+      bar.style.background = '#4a4';
+      res.style.display = 'block';
+      const vid = job.youtube_video_id;
+      const link = vid ? `https://studio.youtube.com/video/${vid}/edit` : null;
+      res.innerHTML = link
+        ? `<a href="${esc(link)}" target="_blank" style="color:var(--primary, #4af);text-decoration:underline;">Open in YouTube Studio →</a>`
+        : '';
+      delete activeJobs[idx];
+      const btn = document.querySelector(`button[onclick*="publishAsync(${idx})"]`);
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Publish again'; }
+    } else {
+      title.textContent = 'Publishing…';
+    }
+  }
+
+  async function pollJob(jobId, idx) {
+    try {
+      const r = await fetch(`/api/publish_jobs/${jobId}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const job = await r.json();
+      renderJob(job);
+      if (job.status === 'pending' || job.status === 'running') {
+        setTimeout(() => pollJob(jobId, idx), POLL_INTERVAL_MS);
+      }
+    } catch (e) {
+      console.error('poll failed:', e);
+      setTimeout(() => pollJob(jobId, idx), POLL_INTERVAL_MS * 2);
+    }
+  }
+
+  window.publishAsync = async function(idx) {
+    const btn = document.querySelector(`button[onclick*="publishAsync(${idx})"]`);
+    // Collect publish payload similar to how the old publishToYoutube did
+    const titleEl = document.getElementById('title-' + idx);
+    const descEl = document.getElementById('description-' + idx);
+    const privacyEl = document.getElementById('privacy-' + idx);
+    const payload = {
+      segment_index: idx,
+      title: titleEl ? titleEl.value : undefined,
+      description: descEl ? descEl.value : undefined,
+      privacy: privacyEl ? privacyEl.value : 'private',
+    };
+    if (btn) { btn.disabled = true; btn.textContent = 'Queuing…'; }
+    try {
+      const r = await fetch(`/api/publish_async/${SESSION_ID}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        if (data.existing_job_id) {
+          alert('A publish is already running for this segment. Reattaching to its progress.');
+          activeJobs[idx] = data.existing_job_id;
+          pollJob(data.existing_job_id, idx);
+          if (btn) { btn.textContent = 'Publishing…'; }
+          return;
+        }
+        throw new Error(data.error || `HTTP ${r.status}`);
+      }
+      activeJobs[idx] = data.job_id;
+      if (btn) { btn.textContent = 'Publishing…'; }
+      pollJob(data.job_id, idx);
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Publish to YouTube'; }
+      alert('Failed to queue publish: ' + (e.message || e));
+    }
+  };
+
+  // On page load, look up pending/running jobs for this session and re-attach
+  async function rehydrate() {
+    try {
+      const r = await fetch(`/api/publish_jobs?session_id=${SESSION_ID}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      (data.jobs || []).forEach(job => {
+        if (job.status === 'pending' || job.status === 'running') {
+          activeJobs[job.segment_index] = job.id;
+          renderJob(job);
+          pollJob(job.id, job.segment_index);
+          const btn = document.querySelector(`button[onclick*="publishAsync(${job.segment_index})"]`);
+          if (btn) { btn.disabled = true; btn.textContent = 'Publishing…'; }
+        } else if (job.status === 'done' || job.status === 'failed') {
+          // Show recent completions too so user can see the last result
+          renderJob(job);
+        }
+      });
+    } catch (e) {
+      console.warn('rehydrate failed:', e);
+    }
+  }
+  rehydrate();
+})();
+</script>
+
+</html>

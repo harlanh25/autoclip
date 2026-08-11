@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio — CFB Clip Studio</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    color: #e8e8e8;
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+  }
+
+  nav {
+    background: #111118;
+    border-bottom: 1px solid #222;
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    height: 56px;
+  }
+
+  .logo { font-size: 1.1rem; font-weight: 700; color: #3b82f6; letter-spacing: 0.05em; text-transform: uppercase; }
+  nav a { color: #888; text-decoration: none; font-size: 0.875rem; transition: color 0.2s; }
+  nav a:hover { color: #e8e8e8; }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 2rem;
+  }
+
+  .card {
+    background: #111118;
+    border: 1px solid #222;
+    border-radius: 12px;
+    padding: 1.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .card h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    color: #e8e8e8;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .badge {
+    background: #1a1a24;
+    color: #888;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 400;
+  }
+
+  .badge.done { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+  .badge.active { background: rgba(232, 184, 75, 0.15); color: #3b82f6; }
+
+  .btn {
+    background: #3b82f6;
+    color: #0a0a0f;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .btn:hover { background: #60a5fa; }
+  .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .btn-ghost { background: transparent; border: 1px solid #333; color: #888; }
+  .btn-ghost:hover { background: #1a1a24; color: #e8e8e8; }
+  .btn-sm { padding: 0.5rem 1rem; font-size: 0.8rem; }
+
+  .step-indicator {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .step {
+    flex: 1;
+    height: 4px;
+    background: #222;
+    border-radius: 2px;
+    transition: background 0.3s;
+  }
+
+  .step.done { background: #4ade80; }
+  .step.active { background: #3b82f6; }
+
+  .topic-list { list-style: none; }
+
+  .topic-item {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .topic-item input {
+    flex: 1;
+    background: #0a0a0f;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 0.65rem 0.875rem;
+    color: #e8e8e8;
+    font-size: 0.875rem;
+  }
+
+  .topic-item input:focus { outline: none; border-color: #3b82f6; }
+
+  .remove-topic {
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #666;
+    cursor: pointer;
+    padding: 0 0.75rem;
+    font-size: 1rem;
+    transition: color 0.2s;
+  }
+
+  .remove-topic:hover { color: #ff6b6b; border-color: #ff6b6b; }
+
+  .add-topic {
+    background: transparent;
+    border: 1px dashed #333;
+    border-radius: 8px;
+    color: #666;
+    cursor: pointer;
+    padding: 0.65rem;
+    width: 100%;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+    margin-top: 0.5rem;
+  }
+
+  .add-topic:hover { border-color: #3b82f6; color: #3b82f6; }
+
+  .transcript-box {
+    background: #0a0a0f;
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: #888;
+  }
+
+  .transcript-segment { margin-bottom: 0.5rem; }
+
+  .ts {
+    color: #3b82f6;
+    font-family: monospace;
+    font-size: 0.75rem;
+    margin-right: 0.5rem;
+  }
+
+  .segment-card {
+    background: #0a0a0f;
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .segment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+  }
+
+  .segment-topic {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .segment-time {
+    font-size: 0.75rem;
+    color: #3b82f6;
+    font-family: monospace;
+  }
+
+  .segment-summary {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+  }
+
+  .time-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .time-inputs input {
+    background: #111118;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    color: #e8e8e8;
+    font-size: 0.8rem;
+    font-family: monospace;
+  }
+
+  .time-inputs input:focus { outline: none; border-color: #3b82f6; }
+
+  .log {
+    background: #0a0a0f;
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 1rem;
+    font-size: 0.8rem;
+    color: #666;
+    max-height: 150px;
+    overflow-y: auto;
+    font-family: monospace;
+  }
+
+  .log p { margin-bottom: 0.25rem; }
+  .log .info { color: #888; }
+  .log .success { color: #4ade80; }
+  .log .error { color: #ff6b6b; }
+
+  .sidebar .card { margin-bottom: 1rem; }
+
+  .show-info p {
+    font-size: 0.875rem;
+    color: #888;
+    margin-bottom: 0.5rem;
+  }
+
+  .show-info strong { color: #e8e8e8; }
+
+  .proceed-btn {
+    display: block;
+    width: 100%;
+    background: #3b82f6;
+    color: #0a0a0f;
+    text-decoration: none;
+    border-radius: 8px;
+    padding: 0.875rem;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: background 0.2s;
+    display: none;
+  }
+
+  .proceed-btn:hover { background: #60a5fa; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand" style="display:flex;align-items:center;gap:0.6rem;"><img src="/static/img/autoclip_mark.png" alt="AutoClip" style="height:26px;width:26px;"><span style="font-size:1.1rem;font-weight:800;letter-spacing:-0.02em;color:#e8e8f0;">Auto<span style="color:#3b82f6;">Clip</span></span></div>
+  <a href="/">Upload</a>
+  <a href="/ads">Ad Library</a>
+  <a href="/thumbnails">Thumbnails</a>
+</nav>
+
+<div class="container">
+  <div class="main">
+    <div class="step-indicator">
+      <div class="step active" id="step1"></div>
+      <div class="step" id="step2"></div>
+      <div class="step" id="step3"></div>
+      <div class="step" id="step4"></div>
+    </div>
+
+    <!-- Step 1: Transcribe -->
+    <div class="card" id="transcribe-card">
+      <h2>📝 Transcribe Video <span class="badge active" id="transcribe-badge">Step 1</span></h2>
+      <p style="color: #888; font-size: 0.875rem; margin-bottom: 1.25rem;">
+        Send the audio to OpenAI Whisper for transcription. This usually takes 2-5 minutes for a 60 min show.
+      </p>
+      <button class="btn" onclick="transcribeVideo()">Start Transcription</button>
+      <div id="transcript-output" style="margin-top: 1rem; display: none;">
+        <div class="transcript-box" id="transcript-box"></div>
+      </div>
+    </div>
+
+    <!-- Step 2: Define Segments -->
+    <div class="card" id="segments-card" style="opacity: 0.4; pointer-events: none;">
+      <h2>✂️ Define Segments <span class="badge" id="segments-badge">Step 2</span></h2>
+      <p style="color: #888; font-size: 0.875rem; margin-bottom: 1.25rem;">
+        Enter the topics for each segment. The AI will find the timestamps in the transcript.
+      </p>
+      <ul class="topic-list" id="topic-list">
+        <li class="topic-item">
+          <input type="text" placeholder="e.g. NIL recruiting news" />
+          <button class="remove-topic" onclick="removeTopic(this)">×</button>
+        </li>
+        <li class="topic-item">
+          <input type="text" placeholder="e.g. Week 1 preview" />
+          <button class="remove-topic" onclick="removeTopic(this)">×</button>
+        </li>
+      </ul>
+      <button class="add-topic" onclick="addTopic()">+ Add another segment</button>
+      <br><br>
+      <button class="btn" onclick="detectSegments()">Detect Segments with AI</button>
+    </div>
+
+    <!-- Step 3: Review Segments -->
+    <div class="card" id="review-card" style="opacity: 0.4; pointer-events: none;">
+      <h2>🎯 Review & Adjust <span class="badge" id="review-badge">Step 3</span></h2>
+      <p style="color: #888; font-size: 0.875rem; margin-bottom: 1.25rem;">
+        Review the detected segments. Adjust timestamps if needed, then proceed to clip editing.
+      </p>
+      <div id="segments-output"></div>
+      <button class="btn" id="proceed-clips-btn" onclick="proceedToClips()" style="display: none;">
+        Proceed to Clip Editor →
+      </button>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+      <h2>📋 Activity Log</h2>
+      <div class="log" id="log">
+        <p class="info">Ready. Start by transcribing your video.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="card show-info">
+      <h2>📁 Session Info</h2>
+      <p><strong>{{ session.show_name }}</strong></p>
+      <p>Session: <strong>{{ session_id }}</strong></p>
+      <p>File: <strong>{{ session.video_file }}</strong></p>
+      <p>Status: <strong id="session-status">Uploaded</strong></p>
+    </div>
+
+    <div class="card">
+      <h2>💡 Tips</h2>
+      <p style="font-size: 0.8rem; color: #666; line-height: 1.6;">
+        Be specific with segment topics — instead of "recruiting," try "DJ Jacobs recruiting update." 
+        The more specific, the better the AI detection.
+      </p>
+    </div>
+
+    <a href="/clips/{{ session_id }}" class="proceed-btn" id="proceed-btn">
+      Go to Clip Editor →
+    </a>
+  </div>
+</div>
+
+<script>
+  const SESSION_ID = "{{ session_id }}";
+  // Restore state on page load if this session already has a transcript / segments
+  document.addEventListener('DOMContentLoaded', function() {
+    const hasTranscript = {{ (session.transcript|length > 0) | tojson if session.transcript else 'false' }};
+    const hasSegments = {{ (session.segments|length > 0) | tojson if session.segments else 'false' }};
+    if (hasTranscript) {
+      document.getElementById('session-status').textContent = hasSegments ? 'Segmented' : 'Transcribed';
+      // Unlock segments card
+      const sc = document.getElementById('segments-card');
+      if (sc) { sc.style.opacity = '1'; sc.style.pointerEvents = 'auto'; }
+      const sb = document.getElementById('segments-badge');
+      if (sb) { sb.className = 'badge active'; }
+      // Mark transcribe as done
+      const transcribeBtn = document.querySelector('button[onclick*="transcribe" i]');
+      if (transcribeBtn) { transcribeBtn.textContent = '✓ Transcribed'; transcribeBtn.disabled = true; }
+    }
+  });
+
+  function log(msg, type='info') {
+    const logEl = document.getElementById('log');
+    const p = document.createElement('p');
+    p.className = type;
+    p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logEl.appendChild(p);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+  }
+
+  async function transcribeVideo() {
+    log('Starting transcription via OpenAI Whisper...');
+    document.querySelector('#transcribe-card button').disabled = true;
+    document.querySelector('#transcribe-card button').textContent = 'Transcribing...';
+    document.getElementById('session-status').textContent = 'Transcribing...';
+
+    try {
+      const resp = await fetch(`/api/transcribe/${SESSION_ID}`, { method: 'POST' });
+      const data = await resp.json();
+
+      if (data.error) {
+        log('Error: ' + data.error, 'error');
+        document.querySelector('#transcribe-card button').disabled = false;
+        document.querySelector('#transcribe-card button').textContent = 'Start Transcription';
+        return;
+      }
+
+      log(`Transcription complete! ${data.segments_count} segments found.`, 'success');
+
+      // Show transcript preview
+      const box = document.getElementById('transcript-box');
+      box.innerHTML = '';
+      data.transcript.slice(0, 50).forEach(seg => {
+        const div = document.createElement('div');
+        div.className = 'transcript-segment';
+        div.innerHTML = `<span class="ts">[${formatTime(seg.start)}]</span>${seg.text}`;
+        box.appendChild(div);
+      });
+      document.getElementById('transcript-output').style.display = 'block';
+
+      // Enable step 2
+      document.getElementById('transcribe-badge').textContent = '✓ Done';
+      document.getElementById('transcribe-badge').className = 'badge done';
+      document.getElementById('step1').className = 'step done';
+      document.getElementById('step2').className = 'step active';
+      document.getElementById('segments-card').style.opacity = '1';
+      document.getElementById('segments-card').style.pointerEvents = 'auto';
+      document.getElementById('segments-badge').className = 'badge active';
+      document.getElementById('session-status').textContent = 'Transcribed';
+
+    } catch(e) {
+      log('Transcription failed: ' + e.message, 'error');
+      document.querySelector('#transcribe-card button').disabled = false;
+      document.querySelector('#transcribe-card button').textContent = 'Start Transcription';
+    }
+  }
+
+  function addTopic() {
+    const list = document.getElementById('topic-list');
+    const li = document.createElement('li');
+    li.className = 'topic-item';
+    li.innerHTML = `
+      <input type="text" placeholder="e.g. Conference standings debate" />
+      <button class="remove-topic" onclick="removeTopic(this)">×</button>
+    `;
+    list.appendChild(li);
+  }
+
+  function removeTopic(btn) {
+    btn.parentElement.remove();
+  }
+
+  async function detectSegments() {
+    const inputs = document.querySelectorAll('#topic-list input');
+    const topics = Array.from(inputs).map(i => i.value).filter(v => v.trim());
+
+    if (topics.length === 0) {
+      alert('Please enter at least one segment topic.');
+      return;
+    }
+
+    log(`Detecting segments for ${topics.length} topics...`);
+    const btn = document.querySelector('#segments-card .btn');
+    btn.disabled = true;
+    btn.textContent = 'Detecting...';
+
+    try {
+      const resp = await fetch(`/api/detect_segments/${SESSION_ID}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ topics })
+      });
+      const data = await resp.json();
+
+      if (data.error) {
+        log('Error: ' + data.error, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Detect Segments with AI';
+        return;
+      }
+
+      log(`Found ${data.segments.length} segments!`, 'success');
+      renderSegments(data.segments);
+
+      document.getElementById('segments-badge').textContent = '✓ Done';
+      document.getElementById('segments-badge').className = 'badge done';
+      document.getElementById('step2').className = 'step done';
+      document.getElementById('step3').className = 'step active';
+      document.getElementById('review-card').style.opacity = '1';
+      document.getElementById('review-card').style.pointerEvents = 'auto';
+      document.getElementById('review-badge').className = 'badge active';
+
+    } catch(e) {
+      log('Detection failed: ' + e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Detect Segments with AI';
+    }
+  }
+
+  function renderSegments(segments) {
+    const out = document.getElementById('segments-output');
+    out.innerHTML = '';
+
+    segments.forEach((seg, i) => {
+      const div = document.createElement('div');
+      div.className = 'segment-card';
+      div.innerHTML = `
+        <div class="segment-header">
+          <div class="segment-topic">Segment ${i+1}: ${seg.topic}</div>
+          <div class="segment-time">${formatTime(seg.start_time)} → ${formatTime(seg.end_time)}</div>
+        </div>
+        <div class="segment-summary">${seg.summary || ''}</div>
+        <div class="time-inputs">
+          <input type="number" value="${seg.start_time}" placeholder="Start (sec)" onchange="updateSegment(${i}, 'start_time', this.value)" />
+          <input type="number" value="${seg.end_time}" placeholder="End (sec)" onchange="updateSegment(${i}, 'end_time', this.value)" />
+        </div>
+      `;
+      out.appendChild(div);
+    });
+
+    document.getElementById('proceed-clips-btn').style.display = 'block';
+    document.getElementById('proceed-btn').style.display = 'block';
+  }
+
+  function updateSegment(index, field, value) {
+    // Update happens server-side on proceed
+    log(`Updated segment ${index+1} ${field} to ${value}`);
+  }
+
+  function proceedToClips() {
+    window.location.href = `/clips/${SESSION_ID}`;
+  }
+</script>
+</body>
+</html>

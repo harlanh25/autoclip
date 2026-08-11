@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --bg: #07070f;
+    --bg2: #0e0e1a; --bg3: #14141f; --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav { background: rgba(7,7,15,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .nav-left { display: flex; align-items: center; gap: 2rem; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-text .accent { color: var(--accent-light); }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-weight: 500; }
+  nav a:hover { color: var(--text); }
+  nav a.active { color: var(--text); }
+  .nav-user { display: flex; align-items: center; gap: 0.75rem; color: var(--muted); font-size: 0.85rem; }
+  .nav-user img { height: 28px; width: 28px; border-radius: 50%; }
+
+  .container { max-width: 900px; margin: 3rem auto; padding: 0 2rem; }
+  h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-top: 0.25rem; margin-bottom: 2rem; }
+
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.75rem; margin-bottom: 1rem; }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+  .sub-line { display: flex; align-items: center; justify-content: space-between; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+  .sub-line:last-child { border-bottom: none; }
+  .sub-line .info { display: flex; flex-direction: column; gap: 0.25rem; }
+  .sub-line .name { font-weight: 600; }
+  .sub-line .status { color: var(--muted); font-size: 0.85rem; }
+
+  .badge { font-size: 0.7rem; font-weight: 700; padding: 0.25rem 0.6rem; border-radius: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .badge-on { background: rgba(52,168,83,0.15); color: #4ade80; }
+  .badge-off { background: rgba(107,107,138,0.15); color: var(--muted); }
+
+  .usage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1rem; }
+  .usage-tile { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
+  .usage-label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 0.5rem; }
+  .usage-value { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; }
+  .usage-value .cap { color: var(--muted); font-size: 1rem; font-weight: 400; }
+  .usage-bar { margin-top: 0.75rem; background: var(--bg3); border-radius: 4px; overflow: hidden; height: 4px; }
+  .usage-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-light)); transition: width 0.3s; }
+
+  .profile-line { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+  .profile-line img { height: 40px; width: 40px; border-radius: 50%; }
+  .profile-line .email { color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <div class="brand"><img src="/static/img/autoclip_mark.png" alt="AutoClip"><span class="brand-text">Auto<span class="accent">Clip</span></span></div>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/channels">Channels</a>
+    <a href="/audio">Audio</a>
+    <a href="/ads">Ad Library</a>
+    <a href="/thumbnails">Thumbnails</a>
+    <a href="/account" class="active">Account</a>
+    {% if current_user.role == 'admin' %}<a href="/admin/users">Admin</a>{% endif %}
+  </div>
+  <div class="nav-user">
+    {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
+    <span>{{ current_user.name or current_user.email }}</span>
+    <a href="/logout" style="color: var(--muted); font-size: 0.8rem;">(sign out)</a>
+  </div>
+</nav>
+
+<div class="container">
+  <h1>Account</h1>
+  <p class="subtitle">Your subscriptions and this month's usage.</p>
+
+  <div class="card">
+    <h2>👤 Profile</h2>
+    <div class="profile-line">
+      {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
+      <div>
+        <div style="font-weight: 600;">{{ current_user.name or current_user.email }}</div>
+        <div class="email">{{ current_user.email }}</div>
+      </div>
+    </div>
+    <div style="color: var(--muted); font-size: 0.85rem;">
+      Role: <strong style="color: var(--text);">{{ current_user.role }}</strong>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>💳 Subscriptions</h2>
+    <div class="sub-line">
+      <div class="info">
+        <span class="name">Clipping</span>
+        <span class="status">
+          {% if current_user.has_clipping %}
+            Monthly cap: {% if current_user.clipping_monthly_cap %}{{ current_user.clipping_monthly_cap }} shows{% else %}Unlimited{% endif %}
+          {% else %}
+            Not subscribed
+          {% endif %}
+        </span>
+      </div>
+      {% if current_user.has_clipping %}
+        <span class="badge badge-on">Active</span>
+      {% else %}
+        <span class="badge badge-off">Off</span>
+      {% endif %}
+    </div>
+    <div class="sub-line">
+      <div class="info">
+        <span class="name">Audio Sync</span>
+        <span class="status">
+          {% if current_user.has_audio %}
+            Monthly cap: {% if current_user.audio_monthly_cap %}{{ current_user.audio_monthly_cap }} episodes{% else %}Unlimited{% endif %}
+          {% else %}
+            Not subscribed
+          {% endif %}
+        </span>
+      </div>
+      {% if current_user.has_audio %}
+        <span class="badge badge-on">Active</span>
+      {% else %}
+        <span class="badge badge-off">Off</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📊 This Month's Usage <span style="color: var(--muted); font-weight: 400; font-size: 0.8rem; margin-left: 0.5rem;">({{ period }})</span></h2>
+    <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem;">Counters reset on the 1st of each month.</p>
+    <div class="usage-grid">
+
+      {% if current_user.has_clipping %}
+      <div class="usage-tile">
+        <div class="usage-label">Shows Processed</div>
+        <div class="usage-value">
+          {{ usage.clipping_shows }}
+          {% if current_user.clipping_monthly_cap %}<span class="cap"> / {{ current_user.clipping_monthly_cap }}</span>{% endif %}
+        </div>
+        {% if current_user.clipping_monthly_cap %}
+        <div class="usage-bar"><div class="usage-bar-fill" style="width: {{ (usage.clipping_shows / current_user.clipping_monthly_cap * 100) | round(0) }}%"></div></div>
+        {% endif %}
+      </div>
+
+      <div class="usage-tile">
+        <div class="usage-label">Clips Cut</div>
+        <div class="usage-value">{{ usage.clipping_clips }}</div>
+      </div>
+      {% endif %}
+
+      {% if current_user.has_audio %}
+      <div class="usage-tile">
+        <div class="usage-label">Episodes Synced</div>
+        <div class="usage-value">
+          {{ usage.audio_episodes }}
+          {% if current_user.audio_monthly_cap %}<span class="cap"> / {{ current_user.audio_monthly_cap }}</span>{% endif %}
+        </div>
+        {% if current_user.audio_monthly_cap %}
+        <div class="usage-bar"><div class="usage-bar-fill" style="width: {{ (usage.audio_episodes / current_user.audio_monthly_cap * 100) | round(0) }}%"></div></div>
+        {% endif %}
+      </div>
+
+      <div class="usage-tile">
+        <div class="usage-label">Sync Configs</div>
+        <div class="usage-value">{{ audio_config_count }}</div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

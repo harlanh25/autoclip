@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoClip — Turn Live Shows Into Ready-to-Publish Clips</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb;
+    --accent-light: #3b82f6;
+    --accent-dark: #1d4ed8;
+    --bg: #07070f;
+    --bg2: #0e0e1a;
+    --bg3: #14141f;
+    --border: #1e1e2e;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav {
+    background: rgba(7,7,15,0.85); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border); padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px; position: sticky; top: 0; z-index: 100;
+  }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+  .brand-text .accent { color: var(--accent-light); }
+  .nav-right { display: flex; align-items: center; gap: 1rem; }
+  .btn-nav { padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; font-weight: 600; text-decoration: none; transition: background 0.2s; }
+  .btn-nav-secondary { color: var(--muted); }
+  .btn-nav-secondary:hover { color: var(--text); }
+  .btn-nav-primary { background: var(--accent); color: #fff; }
+  .btn-nav-primary:hover { background: var(--accent-light); }
+
+  .hero { max-width: 860px; margin: 6rem auto 4rem; padding: 0 2rem; text-align: center; }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: rgba(37,99,235,0.12); border: 1px solid rgba(37,99,235,0.3);
+    color: var(--accent-light); font-size: 0.8rem; font-weight: 600;
+    padding: 0.35rem 0.875rem; border-radius: 20px; letter-spacing: 0.05em;
+    text-transform: uppercase; margin-bottom: 1.5rem;
+  }
+  .hero h1 { font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 800; line-height: 1.08; letter-spacing: -0.03em; margin-bottom: 1.25rem; }
+  .hero h1 .highlight { background: linear-gradient(135deg, var(--accent-light) 0%, #60a5fa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { color: var(--muted); font-size: 1.15rem; line-height: 1.7; max-width: 620px; margin: 0 auto 2.5rem; }
+  .btn-cta { display: inline-block; background: var(--accent); color: #fff; text-decoration: none; padding: 1rem 2rem; border-radius: 10px; font-size: 1rem; font-weight: 700; transition: all 0.2s; }
+  .btn-cta:hover { background: var(--accent-light); box-shadow: 0 4px 24px rgba(37,99,235,0.4); }
+
+  .features { max-width: 1100px; margin: 0 auto 6rem; padding: 0 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; }
+  .feature { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.75rem; }
+  .feature .icon { font-size: 1.75rem; margin-bottom: 0.75rem; }
+  .feature h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .feature p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+
+  .pricing { max-width: 1200px; margin: 0 auto 6rem; padding: 0 2rem; }
+  .pricing-header { text-align: center; margin-bottom: 3rem; }
+  .pricing-header h2 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+  .pricing-header p { color: var(--muted); font-size: 1rem; }
+  .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+  .plan { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; display: flex; flex-direction: column; }
+  .plan.featured { border-color: var(--accent); position: relative; }
+  .plan.featured::before { content: 'MOST POPULAR'; position: absolute; top: -12px; right: 1.5rem; background: var(--accent); color: #fff; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; padding: 0.3rem 0.75rem; border-radius: 12px; }
+  .plan-name { font-size: 0.85rem; font-weight: 600; color: var(--accent-light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+  .plan-price { display: flex; align-items: baseline; gap: 0.25rem; margin-bottom: 0.5rem; }
+  .plan-price .dollar { font-size: 1.5rem; font-weight: 700; color: var(--muted); }
+  .plan-price .amount { font-size: 3rem; font-weight: 800; letter-spacing: -0.03em; }
+  .plan-price .period { color: var(--muted); font-size: 0.95rem; }
+  .plan-tagline { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; min-height: 2.5em; }
+  .plan-features { list-style: none; padding: 0; margin: 0 0 1.5rem; flex: 1; }
+  .plan-features li { padding: 0.5rem 0; font-size: 0.9rem; color: var(--text); display: flex; align-items: flex-start; gap: 0.5rem; }
+  .plan-features li::before { content: '✓'; color: var(--accent-light); font-weight: 700; flex-shrink: 0; }
+  .plan-cta { display: block; text-align: center; padding: 0.875rem 1rem; border-radius: 10px; font-size: 0.95rem; font-weight: 700; text-decoration: none; transition: all 0.2s; }
+  .plan-cta-primary { background: var(--accent); color: #fff; }
+  .plan-cta-primary:hover { background: var(--accent-light); }
+  .plan-cta-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .plan-cta-secondary:hover { border-color: var(--accent); }
+
+  footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">
+    <img src="/static/img/autoclip_mark.png" alt="AutoClip">
+    <span class="brand-text">Auto<span class="accent">Clip</span></span>
+  </div>
+  <div class="nav-right">
+    <a href="/login" class="btn-nav btn-nav-secondary">Sign in</a>
+    <a href="/login" class="btn-nav btn-nav-primary">Get Started</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-eyebrow">⚡ Powered by AI</div>
+  <h1>Turn live shows into<br><span class="highlight">ready-to-publish clips</span></h1>
+  <p>AutoClip transcribes your recording, detects segments with AI, cuts clips, inserts ads, generates titles and thumbnails — and publishes straight to YouTube.</p>
+  <a href="/login" class="btn-cta">Get Started Free →</a>
+</div>
+
+<div class="features">
+  <div class="feature">
+    <div class="icon">🎙️</div>
+    <h3>AI Transcription</h3>
+    <p>Every word of your show, timestamped and searchable, in minutes.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">✂️</div>
+    <h3>Smart Segmentation</h3>
+    <p>Give it your topics — AI finds where each one starts and ends.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">🎬</div>
+    <h3>Automatic Clipping</h3>
+    <p>Cut clean, ready-to-publish clips at the boundaries AI detects.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">🚀</div>
+    <h3>Direct to YouTube</h3>
+    <p>Publish straight to any of your channels — private, scheduled, or live.</p>
+  </div>
+</div>
+
+<div class="pricing">
+  <div class="pricing-header">
+    <h2>Simple, transparent pricing</h2>
+    <p>Start free. Scale as your podcast grows.</p>
+  </div>
+  <div class="pricing-grid">
+
+    <div class="plan">
+      <div class="plan-name">Starter</div>
+      <div class="plan-price">
+        <span class="dollar">$</span>
+        <span class="amount">19</span>
+        <span class="period">/mo</span>
+      </div>
+      <div class="plan-tagline">For solo creators dipping their toe in.</div>
+      <ul class="plan-features">
+        <li>1 YouTube channel</li>
+        <li>4 shows/month</li>
+        <li>Standard clip cutting</li>
+        <li>AI titles + descriptions</li>
+        <li>7-day clip storage</li>
+      </ul>
+      <a href="/login" class="plan-cta plan-cta-secondary">Get Started</a>
+    </div>
+
+    <div class="plan featured">
+      <div class="plan-name">Creator</div>
+      <div class="plan-price">
+        <span class="dollar">$</span>
+        <span class="amount">49</span>
+        <span class="period">/mo</span>
+      </div>
+      <div class="plan-tagline">For serious podcasters running multiple shows.</div>
+      <ul class="plan-features">
+        <li>3 YouTube channels</li>
+        <li>Unlimited shows</li>
+        <li>AI thumbnails</li>
+        <li>Ad insertion</li>
+        <li>30-day clip storage</li>
+        <li>Priority processing</li>
+      </ul>
+      <a href="/login" class="plan-cta plan-cta-primary">Get Started</a>
+    </div>
+
+    <div class="plan">
+      <div class="plan-name">Studio</div>
+      <div class="plan-price">
+        <span class="dollar">$</span>
+        <span class="amount">149</span>
+        <span class="period">/mo</span>
+      </div>
+      <div class="plan-tagline">For teams and networks running many shows.</div>
+      <ul class="plan-features">
+        <li>Unlimited YouTube channels</li>
+        <li>Team seats + roles</li>
+        <li>Audio-only podcast mode</li>
+        <li>Bulk publish + scheduling</li>
+        <li>90-day clip storage</li>
+        <li>Custom thumbnails</li>
+        <li>Priority support</li>
+      </ul>
+      <a href="/login" class="plan-cta plan-cta-secondary">Get Started</a>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  © 2026 AutoClip — All rights reserved.
+</footer>
+
+</body>
+</html>

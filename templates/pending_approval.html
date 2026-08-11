@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pending Approval — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --bg: #07070f;
+    --bg2: #0e0e1a; --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 3rem 2.5rem; max-width: 520px; width: 100%; text-align: center; }
+  .brand { display: flex; align-items: center; justify-content: center; gap: 0.6rem; margin-bottom: 2rem; }
+  .brand img { height: 32px; width: 32px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-text .accent { color: var(--accent-light); }
+  .status-icon { font-size: 3rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.75rem; letter-spacing: -0.02em; }
+  .subtitle { color: var(--muted); font-size: 1rem; line-height: 1.6; margin-bottom: 2rem; }
+  .user-info { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin-bottom: 2rem; }
+  .user-info .email { font-family: monospace; color: var(--accent-light); font-size: 0.9rem; }
+  .actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+  .btn { padding: 0.75rem 1.5rem; border-radius: 10px; font-size: 0.9rem; font-weight: 600; text-decoration: none; transition: all 0.2s; display: inline-block; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-light); }
+  .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="brand">
+    <img src="/static/img/autoclip_mark.png" alt="AutoClip">
+    <span class="brand-text">Auto<span class="accent">Clip</span></span>
+  </div>
+
+  <div class="status-icon">⏳</div>
+  <h1>Waiting for approval</h1>
+  <p class="subtitle">Your account has been created but is pending review by an administrator. You'll be able to use AutoClip once an admin approves your account.</p>
+
+  <div class="user-info">
+    Signed in as <span class="email">{{ user.email }}</span>
+  </div>
+
+  <div class="actions">
+    <a href="/logout" class="btn btn-secondary">Sign out</a>
+  </div>
+</div>
+
+</body>
+</html>

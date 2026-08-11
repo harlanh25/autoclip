@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Channels — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --bg: #07070f;
+    --bg2: #0e0e1a; --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav { background: rgba(7,7,15,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .nav-left { display: flex; align-items: center; gap: 2rem; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-text .accent { color: var(--accent-light); }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-weight: 500; }
+  nav a:hover { color: var(--text); }
+  nav a.active { color: var(--text); }
+  .nav-user { display: flex; align-items: center; gap: 0.75rem; color: var(--muted); font-size: 0.85rem; }
+  .nav-user img { height: 28px; width: 28px; border-radius: 50%; }
+  .logout-link { color: var(--muted); font-size: 0.8rem; }
+
+  .container { max-width: 1100px; margin: 3rem auto; padding: 0 2rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
+  .page-header h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+  .page-header p { color: var(--muted); margin-top: 0.25rem; font-size: 0.95rem; }
+  .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--accent); color: #fff; text-decoration: none; padding: 0.75rem 1.25rem; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: background 0.2s; }
+  .btn-primary:hover { background: var(--accent-light); }
+
+  .channels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+  .channel-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; transition: border-color 0.2s; }
+  .channel-card:hover { border-color: var(--accent); }
+  .channel-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .channel-meta { color: var(--muted); font-size: 0.8rem; margin-bottom: 1rem; }
+  .channel-meta strong { color: var(--text); }
+  .badges { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .badge { font-size: 0.7rem; font-weight: 700; padding: 0.25rem 0.6rem; border-radius: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .badge-owner { background: rgba(37,99,235,0.15); color: var(--accent-light); }
+  .badge-role { background: rgba(107,107,138,0.15); color: var(--muted); }
+  .badge-long { background: rgba(52,168,83,0.15); color: #4ade80; }
+  .badge-short { background: rgba(239,68,68,0.15); color: #f87171; }
+
+  .empty-state { background: var(--bg2); border: 2px dashed var(--border); border-radius: 12px; padding: 3rem 2rem; text-align: center; }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 1rem; }
+  .empty-state h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .empty-state p { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <div class="brand"><img src="/static/img/autoclip_mark.png" alt="AutoClip"><span class="brand-text">Auto<span class="accent">Clip</span></span></div>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/channels" class="active">Channels</a>
+    <a href="/ads">Ad Library</a>
+    <a href="/thumbnails">Thumbnails</a>
+    {% if current_user.role == 'admin' %}
+    <a href="/admin/users">Admin</a>
+    {% endif %}
+  </div>
+  <div class="nav-user">
+    {% if current_user.picture_url %}<img src="{{ current_user.picture_url }}" alt="">{% endif %}
+    <span>{{ current_user.name or current_user.email }}</span>
+    <a href="/logout" class="logout-link">(sign out)</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Your Channels</h1>
+      <p>Manage YouTube channels connected to AutoClip.</p>
+    </div>
+    <a href="/authorize" class="btn-primary">+ Connect New Channel</a>
+  </div>
+
+  {% if channels %}
+  <div class="channels-grid">
+    {% for ch in channels %}
+    <div class="channel-card">
+      <div class="channel-title">{{ ch.title }}</div>
+      <div class="channel-meta">
+        Handle: <strong>{{ ch.handle or '—' }}</strong><br>
+        Channel ID: <strong>{{ ch.youtube_channel_id }}</strong>
+      </div>
+      <div class="badges">
+        {% if ch.user_role %}
+          <span class="badge badge-role">{{ ch.user_role }}</span>
+        {% endif %}
+        {% if not ch.owner_user_id %}
+          <span class="badge badge-short">UNCLAIMED</span>
+        {% endif %}
+        {% if ch.long_uploads_enabled %}
+          <span class="badge badge-long">Long uploads: allowed</span>
+        {% else %}
+          <span class="badge badge-short">Long uploads: 15 min cap</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="icon">📡</div>
+    <h3>No channels connected yet</h3>
+    <p>Connect a YouTube channel to publish clips.</p>
+    <a href="/authorize" class="btn-primary">+ Connect Your First Channel</a>
+  </div>
+  {% endif %}
+</div>
+
+</body>
+</html>

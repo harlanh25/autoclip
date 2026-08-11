@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upgrade Required — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb; --accent-light: #3b82f6; --bg: #07070f;
+    --bg2: #0e0e1a; --border: #1e1e2e; --text: #e8e8f0; --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 3rem 2.5rem; max-width: 520px; width: 100%; text-align: center; }
+  .icon { font-size: 3rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; letter-spacing: -0.02em; }
+  p { color: var(--muted); font-size: 1rem; line-height: 1.6; margin-bottom: 2rem; }
+  .actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+  .btn { padding: 0.75rem 1.5rem; border-radius: 10px; font-size: 0.9rem; font-weight: 600; text-decoration: none; transition: all 0.2s; display: inline-block; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-light); }
+  .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="icon">🔒</div>
+  <h1>{{ feature }} is not enabled</h1>
+  <p>Your account doesn't have {{ feature }} on your current subscription. Contact an admin to enable it, or view your account details for more info.</p>
+  <div class="actions">
+    <a href="/account" class="btn btn-primary">View Account</a>
+    <a href="/dashboard" class="btn btn-secondary">Back to Dashboard</a>
+  </div>
+</div>
+
+</body>
+</html>
