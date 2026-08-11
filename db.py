@@ -79,8 +79,10 @@ def create_or_update_user(google_id, email, name, picture_url):
         role = 'admin' if is_bootstrap_admin else 'member'
         is_approved = 1 if is_bootstrap_admin else 0
         cur = db.execute(
-            "INSERT INTO users (google_id, email, name, picture_url, role, is_approved, last_login_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+            "INSERT INTO users (google_id, email, name, picture_url, role, is_approved, last_login_at, "
+            "trial_started_at, trial_expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, "
+            "CURRENT_TIMESTAMP, datetime('now', '+7 days'))",
             (google_id, email, name, picture_url, role, is_approved)
         )
         db.commit()
