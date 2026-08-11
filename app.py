@@ -1254,7 +1254,7 @@ def _enqueue_publish_task(job_id, session_id, segment_index, segment, session):
                 'audience': worker_url,
             },
         },
-        'dispatch_deadline': {'seconds': 3600},
+        'dispatch_deadline': {'seconds': 1800},
     }
 
     resp = client.create_task(parent=parent, task=task)
