@@ -981,6 +981,122 @@ def _compose_clip_with_ads(session, segment_index, clip_path, work_dir):
 
 
 
+
+# __AUTOCLIP_CLOUD_TASKS_V42__
+# ============================================================================
+# Phase 4.2 — Cloud Tasks + Cloud Run worker integration
+# ============================================================================
+import os as _os_v42
+import json as _json_v42
+
+
+def _enqueue_publish_task(job_id, session_id, segment_index, segment, session):
+    """Push a task to Cloud Tasks that will call our Cloud Run worker.
+
+    The task payload contains all GCS keys the worker needs to fetch inputs.
+    """
+    from google.cloud import tasks_v2
+
+    project = _os_v42.environ.get('CLOUD_TASKS_PROJECT', 'youtube-podcast-sync-502121')
+    location = _os_v42.environ.get('CLOUD_TASKS_LOCATION', 'us-east4')
+    queue = _os_v42.environ.get('CLOUD_TASKS_QUEUE', 'autoclip-jobs')
+    worker_url = _os_v42.environ.get('CLOUD_RUN_WORKER_URL', '').rstrip('/')
+    invoker_sa = _os_v42.environ.get('CLOUD_TASKS_INVOKER_SA', '')
+
+    if not worker_url or not invoker_sa:
+        raise RuntimeError('CLOUD_RUN_WORKER_URL and CLOUD_TASKS_INVOKER_SA env vars required')
+
+    # Resolve ad GCS keys via DB
+    db = autoclip_db.get_db()
+    def _ad_key(ad_id):
+        if not ad_id:
+            return None
+        row = db.execute("SELECT gcs_key FROM ads WHERE id=?", (ad_id,)).fetchone()
+        return row['gcs_key'] if row else None
+
+    payload = {
+        'job_id': job_id,
+        'session_id': session_id,
+        'segment_index': segment_index,
+        'clip_gcs_key': segment.get('clip_gcs_key'),
+        'intro_ad_gcs_key': _ad_key(segment.get('intro_ad_id')),
+        'mid_ad_gcs_key': _ad_key(segment.get('mid_ad_id')),
+        'outro_ad_gcs_key': _ad_key(segment.get('outro_ad_id')),
+        'mid_ad_position_sec': segment.get('mid_ad_position_sec'),
+    }
+
+    client = tasks_v2.CloudTasksClient()
+    parent = client.queue_path(project, location, queue)
+
+    task = {
+        'http_request': {
+            'http_method': tasks_v2.HttpMethod.POST,
+            'url': worker_url + '/',
+            'headers': {'Content-Type': 'application/json'},
+            'body': _json_v42.dumps(payload).encode('utf-8'),
+            'oidc_token': {
+                'service_account_email': invoker_sa,
+                'audience': worker_url,
+            },
+        },
+        'dispatch_deadline': {'seconds': 3600},
+    }
+
+    resp = client.create_task(parent=parent, task=task)
+    app.logger.info(f'Cloud Task enqueued: {resp.name} for job {job_id}')
+    return resp.name
+
+
+@app.route('/api/publish_jobs/<int:job_id>/worker_update', methods=['POST'])
+def publish_job_worker_update(job_id):
+    """Callback endpoint the Cloud Run worker uses to report status.
+
+    Auth via X-Worker-Secret header (matches env var WORKER_SHARED_SECRET).
+    """
+    secret = _os_v42.environ.get('WORKER_SHARED_SECRET', '')
+    got = request.headers.get('X-Worker-Secret', '')
+    if not secret or got != secret:
+        app.logger.warning(f'Rejected worker_update for job {job_id}: bad secret')
+        return jsonify({'error': 'unauthorized'}), 401
+
+    fields = request.get_json(silent=True) or {}
+    allowed = {'status', 'stage', 'progress_pct', 'error',
+               'composed_gcs_key', 'composed_gcs_bucket',
+               'youtube_video_id', 'heartbeat_at'}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return jsonify({'error': 'no valid fields'}), 400
+
+    # Always bump heartbeat
+    updates['heartbeat_at'] = 'CURRENT_TIMESTAMP'
+
+    # Auto-set finished_at when reaching a terminal status
+    if updates.get('status') in ('done', 'failed'):
+        updates['finished_at'] = 'CURRENT_TIMESTAMP'
+
+    db = autoclip_db.get_db()
+    pieces = []
+    vals = []
+    for k, v in updates.items():
+        if v == 'CURRENT_TIMESTAMP':
+            pieces.append(f'{k}=CURRENT_TIMESTAMP')
+        else:
+            pieces.append(f'{k}=?')
+            vals.append(v)
+    vals.append(job_id)
+    n = db.execute(
+        f'UPDATE publish_jobs SET {", ".join(pieces)} WHERE id=?',
+        vals
+    ).rowcount
+    db.commit()
+
+    if n == 0:
+        return jsonify({'error': 'job not found'}), 404
+
+    app.logger.info(f'worker_update job {job_id}: {list(updates.keys())}')
+    return jsonify({'ok': True})
+
+
 # __AUTOCLIP_ASYNC_PUBLISH_V41__
 # ============================================================================
 # Phase 4.1 — Async publish endpoints
@@ -1045,7 +1161,21 @@ def publish_async_create(session_id):
     )
     db.commit()
     job_id = cur.lastrowid
-    app.logger.info(f'Enqueued publish job {job_id} for session {session_id} segment {segment_index}')
+    app.logger.info(f'Inserted publish job {job_id} for session {session_id} segment {segment_index}')
+
+    # Enqueue Cloud Task so GPU worker picks it up
+    segment = session['segments'][segment_index]
+    try:
+        _enqueue_publish_task(job_id, session_id, segment_index, segment, session)
+    except Exception as _te:
+        db.execute(
+            "UPDATE publish_jobs SET status='failed', error=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
+            (f'Failed to enqueue Cloud Task: {_te}', job_id)
+        )
+        db.commit()
+        app.logger.exception(f'Failed to enqueue Cloud Task for job {job_id}')
+        return jsonify({'error': f'Enqueue failed: {_te}', 'job_id': job_id}), 500
+
     return jsonify({'job_id': job_id, 'status': 'pending'})
 
 
