@@ -120,6 +120,61 @@ def dashboard():
     channels = autoclip_db.list_channels_for_user(user['id']) if user['role'] != 'admin' else autoclip_db.list_all_channels()
     return render_template('index.html', current_user=user, channels=channels)
 
+# __AUTOCLIP_MY_SESSIONS_V42__
+@app.route('/sessions')
+def list_sessions():
+    """Dashboard of all sessions owned by the current user."""
+    import glob
+    import os
+    user = autoclip_auth.get_current_user()
+    if not user:
+        return redirect(url_for('auth.login'))
+
+    db = autoclip_db.get_db()
+
+    # Load and enrich each session
+    rows = []
+    for fp in glob.glob('sessions/*.json'):
+        try:
+            with open(fp) as f:
+                s = json.load(f)
+        except Exception:
+            continue
+
+        # Ownership check: admin sees all, users see their own
+        owner = s.get('owner_user_id')
+        if user['role'] != 'admin' and owner != user['id']:
+            continue
+
+        segments = s.get('segments', [])
+        published = sum(1 for seg in segments if seg.get('youtube_video_id'))
+
+        # Channel display name
+        chan_yt_id = s.get('channel_youtube_id')
+        chan_name = '(no channel)'
+        if chan_yt_id:
+            _cr = db.execute(
+                "SELECT display_name FROM channels WHERE youtube_channel_id=?",
+                (chan_yt_id,)
+            ).fetchone()
+            if _cr:
+                chan_name = _cr['display_name']
+
+        rows.append({
+            'id': s.get('id'),
+            'show_name': s.get('show_name') or 'Untitled show',
+            'channel_name': chan_name,
+            'segment_count': len(segments),
+            'published_count': published,
+            'mtime': os.path.getmtime(fp),
+        })
+
+    # Sort by mtime desc (most recent first)
+    rows.sort(key=lambda r: r['mtime'], reverse=True)
+
+    return render_template('sessions.html', sessions=rows, user=user)
+
+
 @app.route('/studio/<session_id>')
 def studio(session_id):
     session = load_session(session_id)

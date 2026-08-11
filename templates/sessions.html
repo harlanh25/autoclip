@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>My Sessions — AutoClip</title>
+<style>
+  :root {
+    --bg: #0a0a0a; --bg2: #141414; --bg3: #1e1e1e; --card: #1a1a1a;
+    --border: #2a2a2a; --fg: #eee; --muted: #888; --primary: #4af; --danger: #f66;
+    --success: #6f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg); color: var(--fg); font-size: 14px;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 2rem; border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+  header .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; }
+  header nav { display: flex; gap: 1.25rem; }
+  header nav a {
+    color: var(--muted); text-decoration: none; font-size: 0.85rem;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  header nav a:hover { color: var(--fg); }
+  header nav a.active { color: var(--primary); }
+  main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+  h1 { margin: 0 0 1.5rem 0; font-size: 1.5rem; }
+  .empty {
+    padding: 3rem; text-align: center; color: var(--muted);
+    background: var(--card); border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+  .empty a { color: var(--primary); }
+  table {
+    width: 100%; border-collapse: collapse;
+    background: var(--card); border-radius: 8px; overflow: hidden;
+  }
+  th, td {
+    text-align: left; padding: 0.85rem 1rem; border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--bg2); color: var(--muted);
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg3); }
+  a.row-link { color: var(--fg); text-decoration: none; font-weight: 500; }
+  a.row-link:hover { color: var(--primary); }
+  .badge {
+    display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px;
+    font-size: 0.75rem; font-weight: 600;
+  }
+  .badge-complete { background: rgba(102, 255, 102, 0.15); color: var(--success); }
+  .badge-partial { background: rgba(74, 170, 255, 0.15); color: var(--primary); }
+  .badge-none { background: rgba(136, 136, 136, 0.15); color: var(--muted); }
+  .muted { color: var(--muted); }
+  .actions { text-align: right; }
+  .btn {
+    display: inline-block; padding: 0.4rem 0.85rem; border-radius: 6px;
+    text-decoration: none; font-size: 0.8rem; font-weight: 600;
+    background: var(--primary); color: #000;
+  }
+  .btn-secondary { background: var(--bg3); color: var(--fg); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🎬 AutoClip</div>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/sessions" class="active">My Sessions</a>
+    <a href="/ads">Ad Library</a>
+    <a href="/thumbnails">Thumbnails</a>
+    <a href="/channels">Channels</a>
+    <a href="/logout">Log out</a>
+  </nav>
+</header>
+
+<main>
+  <h1>My Sessions</h1>
+
+  {% if sessions %}
+    <table>
+      <thead>
+        <tr>
+          <th>Show</th>
+          <th>Channel</th>
+          <th>Segments</th>
+          <th>Published</th>
+          <th class="actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr>
+          <td><a href="/clips/{{ s.id }}" class="row-link">{{ s.show_name }}</a></td>
+          <td class="muted">{{ s.channel_name }}</td>
+          <td>{{ s.segment_count }}</td>
+          <td>
+            {% if s.published_count == s.segment_count and s.segment_count > 0 %}
+              <span class="badge badge-complete">{{ s.published_count }}/{{ s.segment_count }} ✓</span>
+            {% elif s.published_count > 0 %}
+              <span class="badge badge-partial">{{ s.published_count }}/{{ s.segment_count }}</span>
+            {% else %}
+              <span class="badge badge-none">0/{{ s.segment_count }}</span>
+            {% endif %}
+          </td>
+          <td class="actions">
+            <a href="/clips/{{ s.id }}" class="btn btn-secondary">Open →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty">
+      <p>No sessions yet.</p>
+      <p><a href="/">Upload a video to get started →</a></p>
+    </div>
+  {% endif %}
+</main>
+</body>
+</html>
