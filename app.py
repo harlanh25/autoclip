@@ -3594,6 +3594,66 @@ def ads_library_delete(ad_id):
     return jsonify({'status': 'deleted'})
 
 
+
+# __DESCRIPTION_TEXT_ENDPOINTS_V1__
+@app.route('/api/ads/library/<int:ad_id>/description', methods=['POST'])
+def ads_library_set_description(ad_id):
+    """Set the description blurb injected into YouTube descriptions when this
+    ad is selected on a segment. Body: {"description_text": "..."}"""
+    user = autoclip_auth.get_current_user()
+    payload = request.get_json(silent=True) or {}
+    text = (payload.get('description_text') or '').strip()
+    if len(text) > 2000:
+        return jsonify({'error': 'description_text max 2000 chars'}), 400
+    db = autoclip_db.get_db()
+    row = db.execute("SELECT * FROM ads WHERE id=?", (ad_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'not found'}), 404
+    if user['role'] != 'admin':
+        if not autoclip_db.user_has_channel_access(user['id'], row['channel_id']):
+            return jsonify({'error': 'forbidden'}), 403
+    db.execute("UPDATE ads SET description_text=? WHERE id=?", (text or None, ad_id))
+    db.commit()
+    return jsonify({'ok': True, 'ad_id': ad_id, 'description_text': text})
+
+
+@app.route('/api/channels/<int:channel_id>/description_settings', methods=['GET', 'POST'])
+def channel_description_settings(channel_id):
+    """GET or set a channel's base description and description assembly order."""
+    user = autoclip_auth.get_current_user()
+    db = autoclip_db.get_db()
+    row = db.execute("SELECT * FROM channels WHERE id=?", (channel_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'not found'}), 404
+    if user['role'] != 'admin':
+        if not autoclip_db.user_has_channel_access(user['id'], channel_id):
+            return jsonify({'error': 'forbidden'}), 403
+
+    if request.method == 'GET':
+        d = dict(row)
+        return jsonify({
+            'channel_id': channel_id,
+            'base_description': d.get('base_description') or '',
+            'description_order': d.get('description_order') or 'ai_ads_base',
+            'orders': list(DESCRIPTION_ORDERS.keys()),
+        })
+
+    payload = request.get_json(silent=True) or {}
+    base = (payload.get('base_description') or '').strip()
+    order = payload.get('description_order') or 'ai_ads_base'
+    if order not in DESCRIPTION_ORDERS:
+        return jsonify({'error': f'description_order must be one of {list(DESCRIPTION_ORDERS)}'}), 400
+    if len(base) > 4000:
+        return jsonify({'error': 'base_description max 4000 chars'}), 400
+    db.execute(
+        "UPDATE channels SET base_description=?, description_order=?, "
+        "updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (base or None, order, channel_id)
+    )
+    db.commit()
+    return jsonify({'ok': True, 'base_description': base, 'description_order': order})
+
+
 @app.route('/api/ads/library/<int:ad_id>/set_role', methods=['POST'])
 def ads_library_set_role(ad_id):
     """Assign this ad as intro or outro for its channel, or clear.
