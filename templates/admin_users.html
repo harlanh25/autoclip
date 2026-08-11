@@ -82,6 +82,9 @@
         <th>User</th>
         <th>Status</th>
         <th>Role</th>
+        <th>Video Tier</th>
+        <th>Audio Tier</th>
+        <th>Trial</th>
         <th>Joined</th>
         <th>Actions</th>
       </tr>
@@ -110,6 +113,29 @@
             <span class="badge badge-admin">Admin</span>
           {% else %}
             <span class="badge badge-member">Member</span>
+          {% endif %}
+        </td>
+        <td>
+          <select class="video-tier-select" data-user-id="{{ u.id }}" onchange="setTier({{ u.id }}, 'video_tier', this.value)" style="background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 0.85rem;">
+            <option value="demo"  {% if u.video_tier == 'demo' %}selected{% endif %}>Demo</option>
+            <option value="tier1" {% if u.video_tier == 'tier1' %}selected{% endif %}>Starter ($49.99)</option>
+            <option value="tier2" {% if u.video_tier == 'tier2' %}selected{% endif %}>Pro ($79.99)</option>
+            <option value="tier3" {% if u.video_tier == 'tier3' %}selected{% endif %}>Studio ($149.99)</option>
+          </select>
+        </td>
+        <td>
+          <select class="audio-tier-select" data-user-id="{{ u.id }}" onchange="setTier({{ u.id }}, 'audio_tier', this.value)" style="background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 0.85rem;">
+            <option value="demo"  {% if u.audio_tier == 'demo' %}selected{% endif %}>Demo</option>
+            <option value="tier1" {% if u.audio_tier == 'tier1' %}selected{% endif %}>Starter ($24.99)</option>
+            <option value="tier2" {% if u.audio_tier == 'tier2' %}selected{% endif %}>Pro ($39.99)</option>
+            <option value="tier3" {% if u.audio_tier == 'tier3' %}selected{% endif %}>Studio ($49.99)</option>
+          </select>
+        </td>
+        <td style="font-size: 0.8rem;">
+          {% if u.trial_expires_at %}
+            <span style="color: var(--muted);">{{ u.trial_expires_at.split(' ')[0] if u.trial_expires_at else '' }}</span>
+          {% else %}
+            <span style="color: var(--muted);">—</span>
           {% endif %}
         </td>
         <td style="color: var(--muted); font-size: 0.85rem;">{{ u.created_at.split('T')[0] if 'T' in u.created_at else u.created_at.split(' ')[0] }}</td>
@@ -150,6 +176,20 @@ async function setRole(id, role) {
     body: JSON.stringify({ role })
   });
   window.location.reload();
+}
+
+async function setTier(id, field, value) {
+  const body = {};
+  body[field] = value;
+  const r = await fetch(`/api/admin/users/${id}/tier`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const j = await r.json();
+  if (!r.ok) {
+    alert('Failed to update tier: ' + (j.error || 'unknown'));
+  }
 }
 </script>
 

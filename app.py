@@ -2191,6 +2191,24 @@ def admin_approve_user(user_id):
     return jsonify({'status': 'approved'})
 
 
+# __ADMIN_SET_TIER_V1__
+@app.route('/api/admin/users/<int:user_id>/tier', methods=['POST'])
+def admin_set_user_tier(user_id):
+    user = autoclip_auth.get_current_user()
+    if user['role'] != 'admin':
+        return jsonify({'error': 'admin only'}), 403
+    data = request.get_json() or {}
+    video_tier = data.get('video_tier')
+    audio_tier = data.get('audio_tier')
+    if not video_tier and not audio_tier:
+        return jsonify({'error': 'video_tier or audio_tier required'}), 400
+    try:
+        autoclip_db.set_user_tier(user_id, video_tier=video_tier, audio_tier=audio_tier)
+    except AssertionError as _e:
+        return jsonify({'error': str(_e)}), 400
+    return jsonify({'status': 'ok'})
+
+
 @app.route('/api/admin/users/<int:user_id>/unapprove', methods=['POST'])
 def admin_unapprove_user(user_id):
     user = autoclip_auth.get_current_user()

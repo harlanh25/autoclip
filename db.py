@@ -212,3 +212,27 @@ def list_users_for_channel(channel_id):
         (channel_id,)
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+# __SET_USER_TIER_V1__
+def set_user_tier(user_id, video_tier=None, audio_tier=None):
+    """Update a user's tier(s). Also toggles has_clipping/has_audio and applies cap defaults."""
+    from datetime import datetime
+    # Cap defaults per tier (must match plans.py)
+    VIDEO_CAPS = {'demo': 3, 'tier1': 20, 'tier2': 50, 'tier3': 200}
+    AUDIO_CAPS = {'demo': 999999, 'tier1': 30, 'tier2': 100, 'tier3': 500}
+    updates = []
+    values = []
+    if video_tier:
+        assert video_tier in VIDEO_CAPS, f'bad video_tier {video_tier}'
+        updates += ['video_tier=?', 'clipping_monthly_cap=?', 'has_clipping=?']
+        values += [video_tier, VIDEO_CAPS[video_tier], 1 if video_tier != 'demo' else 1]
+    if audio_tier:
+        assert audio_tier in AUDIO_CAPS, f'bad audio_tier {audio_tier}'
+        updates += ['audio_tier=?', 'audio_monthly_cap=?', 'has_audio=?']
+        values += [audio_tier, AUDIO_CAPS[audio_tier], 1 if audio_tier != 'demo' else 1]
+    if not updates:
+        return
+    values.append(user_id)
+    get_db().execute(f"UPDATE users SET {', '.join(updates)} WHERE id=?", values)
+    get_db().commit()
