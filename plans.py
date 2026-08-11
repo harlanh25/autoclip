@@ -24,9 +24,22 @@ AUDIO_TIERS = {
 
 BUNDLE_TIERS = {
     'tier1': {'name': 'Bundle Starter', 'price_usd': 59.99,  'video_cap': 20,  'audio_cap': 30,  'savings_usd': 15.00, 'stripe_price_id': None},
-    'tier2': {'name': 'Bundle Pro',     'price_usd': 95.99,  'video_cap': 50,  'audio_cap': 100, 'savings_usd': 24.00, 'stripe_price_id': None},
+    'tier2': {'name': 'Bundle Pro',     'price_usd': 99.99,  'video_cap': 50,  'audio_cap': 100, 'savings_usd': 19.99, 'stripe_price_id': None},
     'tier3': {'name': 'Bundle Studio',  'price_usd': 159.99, 'video_cap': 200, 'audio_cap': 500, 'savings_usd': 40.00, 'stripe_price_id': None},
 }
+
+# __STRIPE_PRICE_WIRING__
+# Populate the stripe_price_id stubs from stripe_config so there is exactly
+# one place price IDs are declared. Import is lazy + guarded so plans.py
+# still works standalone (tests, scripts) if stripe_config is absent.
+try:
+    import stripe_config as _sc
+    for _tbl, _prod in ((VIDEO_TIERS, 'video'), (AUDIO_TIERS, 'audio'), (BUNDLE_TIERS, 'bundle')):
+        for _tier in _tbl:
+            _tbl[_tier]['stripe_price_id'] = _sc.price_for_plan(f'{_prod}_{_tier}')
+except Exception:
+    pass
+
 
 
 # ─────────────────────────────────────────────────────────────
