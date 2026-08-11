@@ -100,7 +100,12 @@ def download_from_gcs(gcs_key, local_path):
     return local_path
 
 
-def signed_url(gcs_key, expires_seconds=3600, method="GET"):
+def download_bytes(gcs_key):
+    """Download an object straight into memory. For small files only."""
+    return get_bucket().blob(gcs_key).download_as_bytes()
+
+
+def signed_url(gcs_key, expires_seconds=3600, method="GET", download_name=None):
     """Generate a short-lived signed URL. Uses IAM sign endpoint for GCE service accounts."""
     bucket = get_bucket()
     blob = bucket.blob(gcs_key)
@@ -111,12 +116,17 @@ def signed_url(gcs_key, expires_seconds=3600, method="GET"):
     from google.auth import compute_engine
     from google.auth.transport import requests as _rq
 
+    _extra = {}
+    if download_name:
+        _extra["response_disposition"] = f'attachment; filename="{download_name}"'
+
     try:
         # Fast path: normal signed URL (works if we have a private key)
         return blob.generate_signed_url(
             version="v4",
             expiration=timedelta(seconds=expires_seconds),
             method=method,
+            **_extra,
         )
     except Exception:
         # Fallback: sign via IAM (for VM service accounts)
@@ -130,6 +140,7 @@ def signed_url(gcs_key, expires_seconds=3600, method="GET"):
             method=method,
             service_account_email=credentials.service_account_email,
             access_token=credentials.token,
+            **_extra,
         )
 
 

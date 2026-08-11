@@ -3294,10 +3294,25 @@ def thumbnails_library_download(thumb_id):
     if user['role'] != 'admin':
         if not autoclip_db.user_has_channel_access(user['id'], row['channel_id']):
             return 'forbidden', 403
+    # Stream with an attachment header. Redirecting to a signed URL just
+    # navigates the browser to the image, which renders it instead of saving.
     try:
-        url = gcs_storage.signed_url(row['gcs_key'], expires_seconds=600)
-        return redirect(url)
+        import io as _io
+        from flask import send_file as _send_file
+        d = dict(row)
+        key = d['gcs_key']
+        data = gcs_storage.download_bytes(key)
+        ext = os.path.splitext(key)[1].lower() or '.png'
+        mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                '.webp': 'image/webp', '.gif': 'image/gif'}.get(ext, 'application/octet-stream')
+        base = (d.get('display_name') or f'thumbnail_{thumb_id}').strip()
+        base = re.sub(r'[^A-Za-z0-9._-]+', '_', base) or f'thumbnail_{thumb_id}'
+        if not base.lower().endswith(ext):
+            base += ext
+        return _send_file(_io.BytesIO(data), mimetype=mime,
+                          as_attachment=True, download_name=base)
     except Exception as e:
+        app.logger.exception('thumbnail download failed')
         return f'Failed: {e}', 500
 
 
@@ -3717,10 +3732,21 @@ def ads_library_download(ad_id):
     if user['role'] != 'admin':
         if not autoclip_db.user_has_channel_access(user['id'], row['channel_id']):
             return 'forbidden', 403
+    # Ads can be large video files, so redirect rather than streaming through
+    # the VM - but ask GCS for an attachment disposition so the browser saves
+    # the file instead of navigating to it.
     try:
-        url = gcs_storage.signed_url(row['gcs_key'], expires_seconds=600)
+        d = dict(row)
+        key = d['gcs_key']
+        ext = os.path.splitext(key)[1].lower() or '.mp4'
+        base = (d.get('display_name') or f'ad_{ad_id}').strip()
+        base = re.sub(r'[^A-Za-z0-9._-]+', '_', base) or f'ad_{ad_id}'
+        if not base.lower().endswith(ext):
+            base += ext
+        url = gcs_storage.signed_url(key, expires_seconds=600, download_name=base)
         return redirect(url)
     except Exception as e:
+        app.logger.exception('ad download failed')
         return f'Failed: {e}', 500
 
 
