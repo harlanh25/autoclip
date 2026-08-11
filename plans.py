@@ -195,3 +195,116 @@ def can_publish_audio(user, current_month_count):
     if cap and cap < 999999 and current_month_count >= cap:
         return False, f'Monthly cap reached ({cap} syncs). Upgrade for more.'
     return True, None
+
+
+# __TRIAL_DISPLAY_V1__
+# ─────────────────────────────────────────────────────────────
+# Display-layer trial/usage state (product-aware).
+# Enforcement still lives in can_create_session / can_publish_video.
+# These are for UI only — banners, usage bars, upgrade prompts.
+# ─────────────────────────────────────────────────────────────
+
+def _trial_days_left(user):
+    """Raw days left on trial_expires_at, or None. Not product-aware."""
+    if not user or not user.get('trial_expires_at'):
+        return None
+    try:
+        exp = datetime.fromisoformat(user['trial_expires_at'])
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        remaining = (exp - datetime.now(timezone.utc)).total_seconds() / 86400
+        return max(0, int(remaining) + (1 if remaining > 0 else 0))
+    except Exception:
+        return None
+
+
+def _has_any_paid_tier(user):
+    """True if the user pays for at least one product."""
+    if not user:
+        return False
+    return (user.get('video_tier') or 'demo') != 'demo' or \
+           (user.get('audio_tier') or 'demo') != 'demo'
+
+
+def video_trial_state(user):
+    """Trial state for the VIDEO product only."""
+    if not user or user.get('video_tier') != 'demo':
+        return {'on_trial': False, 'expired': False, 'days_left': None}
+    if not user.get('trial_expires_at'):
+        return {'on_trial': False, 'expired': False, 'days_left': None}
+    if _has_any_paid_tier(user):
+        # Converted on some product -> trial is over, not "still trialing"
+        return {'on_trial': False, 'expired': False, 'days_left': None}
+    days = _trial_days_left(user)
+    return {
+        'on_trial': True,
+        'expired': (days == 0),
+        'days_left': days,
+    }
+
+
+def audio_trial_state(user):
+    """Trial state for the AUDIO product only."""
+    if not user or user.get('audio_tier') != 'demo':
+        return {'on_trial': False, 'expired': False, 'days_left': None}
+    if not user.get('trial_expires_at'):
+        return {'on_trial': False, 'expired': False, 'days_left': None}
+    if _has_any_paid_tier(user):
+        # Converted on some product -> trial is over, not "still trialing"
+        return {'on_trial': False, 'expired': False, 'days_left': None}
+    days = _trial_days_left(user)
+    return {
+        'on_trial': True,
+        'expired': (days == 0),
+        'days_left': days,
+    }
+
+
+def usage_context(user, db=None):
+    """
+    Everything the UI needs about trial + usage, in one dict.
+    Safe to call with db=None (usage counts come back as None).
+    Never raises — UI must not 500 because a count failed.
+    """
+    if not user:
+        return {'authed': False}
+
+    vt = video_trial_state(user)
+    at = audio_trial_state(user)
+
+    videos_used = None
+    if db is not None and user.get('has_clipping'):
+        try:
+            videos_used = video_usage_this_month(db, user['id'])
+        except Exception:
+            videos_used = None
+
+    v_cap = video_cap_for_user(user)
+    sessions_used = user.get('sessions_created_count') or 0
+    is_demo_video = user.get('video_tier') == 'demo'
+
+    return {
+        'authed': True,
+        'plan': user_plan_summary(user),
+
+        'video_trial': vt,
+        'audio_trial': at,
+        # Show a banner only if at least one product is genuinely on trial
+        'show_trial_banner': bool(vt['on_trial'] or at['on_trial']),
+        # Hard block only when the video trial is done and they never paid
+        'video_locked': bool(vt['expired']),
+
+        'videos_used': videos_used,
+        'videos_cap': v_cap,
+        'videos_pct': (
+            min(100, int(videos_used * 100 / v_cap))
+            if (videos_used is not None and v_cap) else None
+        ),
+
+        'sessions_used': sessions_used,
+        'sessions_cap': DEMO_SESSION_LIMIT if is_demo_video else None,
+        'sessions_pct': (
+            min(100, int(sessions_used * 100 / DEMO_SESSION_LIMIT))
+            if is_demo_video else None
+        ),
+    }
