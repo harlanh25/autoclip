@@ -982,6 +982,221 @@ def _compose_clip_with_ads(session, segment_index, clip_path, work_dir):
 
 
 
+# __AUTOCLIP_YT_FINISHER_V42__
+# ============================================================================
+# Phase 4.2 — Background YouTube finisher
+# ============================================================================
+# The Cloud Run worker composes the video (with NVENC on GPU) but can't
+# upload to YouTube because YouTube OAuth tokens live only on the VM.
+# So the worker marks the job stage='compose_done' and uploads the composed
+# mp4 to GCS. This background thread watches for those jobs and finishes
+# them: downloads composed, uploads to YouTube, updates DB, cleans up GCS.
+
+import threading as _threading_v42y
+import time as _time_v42y
+import tempfile as _tempfile_v42y
+import os as _os_v42y
+import json as _json_v42y
+import traceback as _traceback_v42y
+
+_YT_FINISHER_STARTED = False
+_YT_FINISHER_LOCK = _threading_v42y.Lock()
+
+
+def _finish_publish_job(job_id):
+    """Download composed mp4 from GCS, upload to YouTube, mark job done."""
+    with app.app_context():
+        db = autoclip_db.get_db()
+        row = db.execute(
+            "SELECT id, session_id, segment_index, user_id, privacy, publish_payload, "
+            "       composed_gcs_key, composed_gcs_bucket "
+            "FROM publish_jobs WHERE id=?", (job_id,)
+        ).fetchone()
+        if not row:
+            app.logger.warning(f'finisher: job {job_id} vanished')
+            return
+        job = dict(row)
+
+        composed_key = job['composed_gcs_key']
+        composed_bucket = job['composed_gcs_bucket'] or 'autoclip-uploads'
+        if not composed_key:
+            db.execute(
+                "UPDATE publish_jobs SET status='failed', error=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
+                ('No composed_gcs_key on job', job_id))
+            db.commit()
+            return
+
+        try:
+            session = load_session(job['session_id'])
+            segment = session['segments'][job['segment_index']]
+            payload = _json_v42y.loads(job['publish_payload'] or '{}')
+
+            # Download the composed file
+            db.execute("UPDATE publish_jobs SET stage='downloading_composed', progress_pct=93, heartbeat_at=CURRENT_TIMESTAMP WHERE id=?", (job_id,))
+            db.commit()
+
+            _tmp = _tempfile_v42y.mkdtemp(prefix='autoclip_finisher_')
+            local_composed = _os_v42y.path.join(_tmp, 'composed.mp4')
+            gcs_storage.download_from_gcs(composed_key, local_composed)
+
+            # Do the YouTube upload — mirror worker.py logic
+            db.execute("UPDATE publish_jobs SET stage='uploading_youtube', progress_pct=95, heartbeat_at=CURRENT_TIMESTAMP WHERE id=?", (job_id,))
+            db.commit()
+
+            import googleapiclient.discovery
+            import google.oauth2.credentials
+            import google.auth.transport.requests
+            from googleapiclient.http import MediaFileUpload
+
+            yt_channel_id = session.get('channel_youtube_id')
+            if not yt_channel_id:
+                raise RuntimeError('Session has no channel_youtube_id')
+
+            ch = db.execute(
+                "SELECT * FROM channels WHERE youtube_channel_id=?", (yt_channel_id,)
+            ).fetchone()
+            if not ch:
+                raise RuntimeError(f'Channel {yt_channel_id} not found')
+            token_path = _os_v42y.path.join(_os_v42y.path.dirname(_os_v42y.path.abspath(__file__)), ch['token_path'])
+            if not _os_v42y.path.exists(token_path):
+                raise RuntimeError(f'Token file missing: {token_path}')
+            with open(token_path) as _f:
+                token_data = _json_v42y.load(_f)
+            creds = google.oauth2.credentials.Credentials(
+                token=token_data.get('token'),
+                refresh_token=token_data.get('refresh_token'),
+                token_uri=token_data.get('token_uri'),
+                client_id=token_data.get('client_id'),
+                client_secret=token_data.get('client_secret'),
+                scopes=token_data.get('scopes'),
+            )
+            if not creds.valid:
+                creds.refresh(google.auth.transport.requests.Request())
+                token_data['token'] = creds.token
+                with open(token_path, 'w') as _f:
+                    _json_v42y.dump(token_data, _f)
+
+            yt = googleapiclient.discovery.build('youtube', 'v3', credentials=creds)
+
+            title = payload.get('title') or segment.get('title') or 'Untitled'
+            description = payload.get('description') or segment.get('description') or ''
+            privacy = payload.get('privacy', job.get('privacy') or 'private')
+            tags = payload.get('tags') or []
+            category_id = str(payload.get('category_id') or 22)
+
+            body = {
+                'snippet': {
+                    'title': title[:100],
+                    'description': description,
+                    'tags': tags,
+                    'categoryId': category_id,
+                },
+                'status': {
+                    'privacyStatus': privacy,
+                    'selfDeclaredMadeForKids': False,
+                }
+            }
+
+            media = MediaFileUpload(local_composed, mimetype='video/mp4', resumable=True, chunksize=8*1024*1024)
+            req = yt.videos().insert(part='snippet,status', body=body, media_body=media)
+
+            response = None
+            last_pct = 95
+            while response is None:
+                status_, response = req.next_chunk()
+                if status_:
+                    p = int(95 + status_.progress() * 4)
+                    if p != last_pct:
+                        db.execute("UPDATE publish_jobs SET progress_pct=?, heartbeat_at=CURRENT_TIMESTAMP WHERE id=?", (p, job_id))
+                        db.commit()
+                        last_pct = p
+
+            video_id = response.get('id')
+            if not video_id:
+                raise RuntimeError(f'YouTube returned no video id: {response}')
+
+            # Persist video_id on segment
+            session = load_session(job['session_id'])
+            session['segments'][job['segment_index']]['youtube_video_id'] = video_id
+            save_session(job['session_id'], session)
+
+            db.execute(
+                "UPDATE publish_jobs "
+                "SET status='done', stage='complete', progress_pct=100, "
+                "    youtube_video_id=?, finished_at=CURRENT_TIMESTAMP, heartbeat_at=CURRENT_TIMESTAMP "
+                "WHERE id=?", (video_id, job_id))
+            db.commit()
+            app.logger.info(f'Finisher: job {job_id} done, video_id={video_id}')
+
+            # Cleanup GCS temp composed
+            try:
+                gcs_storage.delete_from_gcs(composed_key, bucket_name=composed_bucket)
+            except AttributeError:
+                # If delete helper doesn't exist, cleanup manually via client
+                try:
+                    from google.cloud import storage as _storage
+                    _storage.Client().bucket(composed_bucket).blob(composed_key).delete()
+                except Exception as _de:
+                    app.logger.warning(f'Failed to delete GCS temp {composed_key}: {_de}')
+            except Exception as _de:
+                app.logger.warning(f'Failed to delete GCS temp: {_de}')
+
+            # Cleanup local temp
+            try:
+                import shutil as _sh
+                _sh.rmtree(_tmp, ignore_errors=True)
+            except Exception:
+                pass
+
+        except Exception as _e:
+            tb = _traceback_v42y.format_exc()
+            app.logger.exception(f'Finisher: job {job_id} FAILED')
+            try:
+                db.execute(
+                    "UPDATE publish_jobs SET status='failed', error=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (f'YouTube upload failed: {_e}\n{tb[-1500:]}', job_id))
+                db.commit()
+            except Exception:
+                app.logger.exception('Also failed to update job status')
+
+
+def _yt_finisher_loop():
+    """Poll for compose_done jobs, run finisher on each."""
+    app.logger.info('YT finisher thread started')
+    while True:
+        try:
+            with app.app_context():
+                db = autoclip_db.get_db()
+                row = db.execute(
+                    "SELECT id FROM publish_jobs "
+                    "WHERE stage='compose_done' AND status='running' "
+                    "ORDER BY created_at ASC LIMIT 1"
+                ).fetchone()
+                if row:
+                    _finish_publish_job(row['id'])
+                else:
+                    _time_v42y.sleep(5)
+        except Exception:
+            app.logger.exception('YT finisher loop error')
+            _time_v42y.sleep(10)
+
+
+def _start_yt_finisher_once():
+    global _YT_FINISHER_STARTED
+    with _YT_FINISHER_LOCK:
+        if _YT_FINISHER_STARTED:
+            return
+        _YT_FINISHER_STARTED = True
+        t = _threading_v42y.Thread(target=_yt_finisher_loop, name='yt-finisher', daemon=True)
+        t.start()
+
+
+# Start the finisher on first HTTP request (Flask 3.x compatible pattern)
+@app.before_request
+def _yt_finisher_startup_hook():
+    _start_yt_finisher_once()
+
+
 # __AUTOCLIP_CLOUD_TASKS_V42__
 # ============================================================================
 # Phase 4.2 — Cloud Tasks + Cloud Run worker integration
