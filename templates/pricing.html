@@ -181,7 +181,7 @@
       {% if is_current %}
         <span class="tier-btn current-badge">✓ Your current plan</span>
       {% else %}
-        <a href="mailto:harlanhgharris@gmail.com?subject=Upgrade to {{ t.name }}&body=Hi, I'd like to upgrade to the {{ t.name }} plan (${{ '%.2f'|format(t.price_usd) }}/mo)." class="tier-btn">Get {{ t.name }}</a>
+        <button class="tier-btn" onclick="acCheckout(this, 'bundle_{{ key }}')">Get {{ t.name }}</button>
       {% endif %}
     </div>
     {% endfor %}
@@ -200,7 +200,7 @@
       {% if is_current %}
         <span class="tier-btn current-badge">✓ Your current plan</span>
       {% else %}
-        <a href="mailto:harlanhgharris@gmail.com?subject=Upgrade to Video {{ t.name }}&body=Hi, I'd like the Video {{ t.name }} plan (${{ '%.2f'|format(t.price_usd) }}/mo)." class="tier-btn secondary">Get Video {{ t.name }}</a>
+        <button class="tier-btn secondary" onclick="acCheckout(this, 'video_{{ key }}')">Get Video {{ t.name }}</button>
       {% endif %}
     </div>
     {% endif %}
@@ -220,7 +220,7 @@
       {% if is_current %}
         <span class="tier-btn current-badge">✓ Your current plan</span>
       {% else %}
-        <a href="mailto:harlanhgharris@gmail.com?subject=Upgrade to Audio {{ t.name }}&body=Hi, I'd like the Audio {{ t.name }} plan (${{ '%.2f'|format(t.price_usd) }}/mo)." class="tier-btn secondary">Get Audio {{ t.name }}</a>
+        <button class="tier-btn secondary" onclick="acCheckout(this, 'audio_{{ key }}')">Get Audio {{ t.name }}</button>
       {% endif %}
     </div>
     {% endif %}
@@ -250,5 +250,24 @@
   </div>
 </main>
 
+
+<script>
+async function acCheckout(btn, planKey) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Loading\u2026';
+  try {
+    const res = await fetch('/api/checkout/' + planKey, { method: 'POST' });
+    if (res.status === 401) { window.location = '/login'; return; }
+    const data = await res.json();
+    if (data.url) { window.location = data.url; return; }
+    alert(data.error || 'Could not start checkout. Please try again.');
+  } catch (e) {
+    alert('Network error starting checkout. Please try again.');
+  }
+  btn.disabled = false;
+  btn.textContent = original;
+}
+</script>
 </body>
 </html>
