@@ -48,6 +48,9 @@ def _enforce_auth_globally():
         return
     if any(path.startswith(p) for p in PUBLIC_PATH_PREFIXES):
         return
+    # Worker callbacks use X-Worker-Secret auth, not session cookies
+    if path.startswith('/api/publish_jobs/') and path.endswith('/worker_update'):
+        return
     user = autoclip_auth.get_current_user()
     if not user:
         if path.startswith('/api/'):
