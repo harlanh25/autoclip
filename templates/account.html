@@ -117,6 +117,46 @@
         <span class="badge badge-off">Off</span>
       {% endif %}
     </div>
+    {% if current_user.stripe_customer_id %}
+    <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.35rem;">Billing</div>
+          <div style="font-size:.9rem;">
+            {% set _st = current_user.subscription_status %}
+            {% if _st == 'active' %}
+              <span style="color:#4ade80;font-weight:600;">● Active</span>
+            {% elif _st in ('past_due', 'unpaid') %}
+              <span style="color:#fbbf24;font-weight:600;">● Payment issue</span>
+            {% elif _st == 'canceled' %}
+              <span style="color:#f87171;font-weight:600;">● Canceled</span>
+            {% elif _st %}
+              <span style="color:var(--muted);font-weight:600;">● {{ _st }}</span>
+            {% else %}
+              <span style="color:var(--muted);font-weight:600;">● No active subscription</span>
+            {% endif %}
+            {% if current_user.current_period_end %}
+              <span style="color:var(--muted);margin-left:.5rem;">
+                {% if _st == 'canceled' %}Access until{% else %}Renews{% endif %}
+                {{ current_user.current_period_end[:10] }}
+              </span>
+            {% endif %}
+          </div>
+          {% if _st in ('past_due', 'unpaid') %}
+          <div style="color:#fbbf24;font-size:.78rem;margin-top:.4rem;">
+            Your last payment didn't go through. Update your card to avoid losing access.
+          </div>
+          {% endif %}
+        </div>
+        <button id="billing-portal-btn" onclick="openBillingPortal()"
+                style="background:transparent;color:var(--text);border:1px solid var(--border);padding:.55rem 1.1rem;border-radius:8px;font-weight:600;font-size:.9rem;cursor:pointer;font-family:inherit;">
+          Manage billing →
+        </button>
+      </div>
+      <div id="billing-portal-err" style="color:#f87171;font-size:.8rem;margin-top:.5rem;"></div>
+    </div>
+    {% endif %}
+
     <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
       <div style="color: var(--muted); font-size: 0.85rem;">
         {% if plan.is_bundle %}
@@ -175,5 +215,25 @@
 
 </div>
 
+<script>
+async function openBillingPortal() {
+  const btn = document.getElementById('billing-portal-btn');
+  const err = document.getElementById('billing-portal-err');
+  err.textContent = '';
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = 'Opening\u2026';
+  try {
+    const r = await fetch('/api/billing_portal', { method: 'POST' });
+    const j = await r.json();
+    if (j.url) { window.location = j.url; return; }
+    err.textContent = j.error || 'Could not open the billing portal.';
+  } catch (e) {
+    err.textContent = 'Network error opening the billing portal.';
+  }
+  btn.disabled = false;
+  btn.textContent = original;
+}
+</script>
 </body>
 </html>
