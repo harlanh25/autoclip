@@ -15,17 +15,17 @@ STRIPE_TEST_MODE = True
 
 # plan_key -> price id
 PRICE_IDS = {
-    'video_tier1':  'price_1U3LkXGoALgSEVQHfYiQDVH0',   # Video Starter    49.99
-    'video_tier2':  'price_1U3LkrGoALgSEVQHH4w9cQ3l',   # Video Pro        79.99
-    'video_tier3':  'price_1U3Ll9GoALgSEVQH3WyBwLif',   # Video Studio    149.99
+    'video_tier1':  'price_1U3OpmPEKVwfSYb5oW6Kx0Jf',   # Video Starter    49.99
+    'video_tier2':  'price_1U3Oq4PEKVwfSYb5WAjt0K5n',   # Video Pro        79.99
+    'video_tier3':  'price_1U3OqLPEKVwfSYb5ZWi47WIb',   # Video Studio    149.99
 
-    'audio_tier1':  'price_1U3LlqGoALgSEVQHsHRS3umE',   # Audio Starter    24.99
-    'audio_tier2':  'price_1U3LmDGoALgSEVQHfA9ve9Mu',   # Audio Pro        39.99
-    'audio_tier3':  'price_1U3LmTGoALgSEVQHbrNz3cqW',   # Audio Studio     49.99
+    'audio_tier1':  'price_1U3OqfPEKVwfSYb5DKe40cVe',   # Audio Starter    24.99
+    'audio_tier2':  'price_1U3OqxPEKVwfSYb5ijSZXTeQ',   # Audio Pro        39.99
+    'audio_tier3':  'price_1U3OrDPEKVwfSYb5dR1AWwl2',   # Audio Studio     49.99
 
-    'bundle_tier1': 'price_1U3LmjGoALgSEVQHUKBl5VEw',   # Bundle Starter   59.99
-    'bundle_tier2': 'price_1U3LmzGoALgSEVQHTCjC4O1s',   # Bundle Pro       99.99
-    'bundle_tier3': 'price_1U3LnLGoALgSEVQHBcwGy5QQ',   # Bundle Studio   159.99
+    'bundle_tier1': 'price_1U3OrSPEKVwfSYb5buNtWkAO',   # Bundle Starter   59.99
+    'bundle_tier2': 'price_1U3OriPEKVwfSYb5uvh0K33Z',   # Bundle Pro       99.99
+    'bundle_tier3': 'price_1U3OrvPEKVwfSYb5BePAtJLB',   # Bundle Studio   159.99
 }
 
 # reverse: price id -> (product, tier). Built at import so the webhook is O(1).
