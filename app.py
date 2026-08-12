@@ -15,6 +15,7 @@ import gcs_storage
 import tempfile
 import gcs_helper
 import plans
+import costs
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, url_for
 from openai import OpenAI
 from googleapiclient.discovery import build
@@ -518,6 +519,16 @@ def transcribe(session_id):
 
     session['transcript'] = all_segments
     session['full_text'] = full_text.strip()
+
+    # Cost: whisper bills per minute; last segment end == audio duration
+    try:
+        _owner = session.get('owner_user_id')
+        if _owner and all_segments:
+            _mins = max(float(sg['end']) for sg in all_segments) / 60.0
+            costs.record_whisper(autoclip_db.get_db(), _owner, _mins,
+                                 session_id=session_id, detail='whisper-1')
+    except Exception:
+        app.logger.exception('whisper cost record failed')
     save_session(session_id, session)
 
     return jsonify({
@@ -619,7 +630,7 @@ Return ONLY a JSON object:
 }}"""
 
     try:
-        response = client.chat.completions.create(
+        response = tracked_chat(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
@@ -652,7 +663,7 @@ Style: power words in ALL CAPS for emphasis, team names included, ends with ! or
 
 Return ONLY JSON: {{"title": "..."}}"""
         try:
-            title_resp = client.chat.completions.create(
+            title_resp = tracked_chat(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": title_prompt}],
                 response_format={"type": "json_object"},
@@ -705,7 +716,7 @@ For the description:
 - Mention to like, subscribe, and turn on notifications
 - Keep it under 500 words"""
 
-    response = client.chat.completions.create(
+    response = tracked_chat(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"}
@@ -2741,6 +2752,33 @@ def compose_youtube_description(session, segment, ai_text=None, channel_row=None
     return out[:5000]
 
 
+
+# __TRACKED_CHAT_V1__
+def tracked_chat(_user_id=None, _session_id=None, _segment_index=None, **kwargs):
+    """
+    client.chat.completions.create with automatic cost recording.
+    Cost tracking never breaks the call - a logging failure is swallowed.
+    """
+    resp = client.chat.completions.create(**kwargs)
+    try:
+        if _user_id is None:
+            # All call sites are inside request handlers, so the session
+            # cookie identifies the user without threading ids through.
+            try:
+                _u = autoclip_auth.get_current_user()
+                _user_id = _u['id'] if _u else None
+            except Exception:
+                _user_id = None
+        if _user_id:
+            costs.record_gpt_text(
+                autoclip_db.get_db(), _user_id, resp,
+                model=kwargs.get('model', 'gpt-4o'),
+                session_id=_session_id, segment_index=_segment_index)
+    except Exception:
+        app.logger.exception('gpt cost record failed')
+    return resp
+
+
 # __SEGMENT_TRANSCRIPT_V1__
 def segment_transcript_text(session, segment, max_chars=3000):
     """
@@ -2810,7 +2848,7 @@ Example format: ["Title one", "Title two", "Title three"]
 
     # Uses global `client`
     try:
-        resp = client.chat.completions.create(
+        resp = tracked_chat(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.9,
@@ -2862,7 +2900,7 @@ Return ONLY a JSON array of 3 description strings. No preamble, no markdown.
 
     # Uses global `client`
     try:
-        resp = client.chat.completions.create(
+        resp = tracked_chat(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.85,
@@ -3099,7 +3137,7 @@ def execute_all(session_id):
                     f"{transcript_snippet}\n\n"
                     "Return ONLY the title text, no quotes, no markdown, no preamble."
                 )
-                resp = client.chat.completions.create(
+                resp = tracked_chat(
                     model="gpt-4o",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7,
@@ -3124,7 +3162,7 @@ def execute_all(session_id):
                     f"{transcript_snippet}\n\n"
                     "Return ONLY the description text, no markdown, no preamble."
                 )
-                resp = client.chat.completions.create(
+                resp = tracked_chat(
                     model="gpt-4o",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7,
