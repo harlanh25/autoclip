@@ -1317,11 +1317,16 @@ def _finish_publish_job(job_id):
             # Scheduled publish: only meaningful when video is Private and publish_at is set
             if publish_at and privacy == 'private':
                 body['status']['publishAt'] = publish_at
-            # Monetization opt-in (channel must be in YPP for this to actually apply)
+            # Monetization is NOT settable via videos.insert. Sending
+            # monetizationDetails makes the client library derive
+            # part=...,monetization_details, which the API rejects with
+            # 400 unexpectedPart and fails the whole upload. It is a
+            # YouTube Studio / Content Owner setting. We record the user's
+            # intent and surface it in the UI instead.
             if monetize:
-                body['monetizationDetails'] = {
-                    'access': {'allowed': True}
-                }
+                app.logger.info(
+                    'Job %s: monetize requested - not settable via API, '
+                    'user must enable it in YouTube Studio', job_id)
 
             media = MediaFileUpload(local_composed, mimetype='video/mp4', resumable=True, chunksize=8*1024*1024)
             req = yt.videos().insert(part='snippet,status', body=body, media_body=media)
