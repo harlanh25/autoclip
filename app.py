@@ -2073,6 +2073,24 @@ def _resize_thumbnail_to_youtube(image_bytes):
 
 
 @app.route('/api/generate_thumbnail', methods=['POST'])
+def _channel_thumbnail_style(yt_channel_id):
+    """Return the channel's saved thumbnail style text, or '' if none.
+
+    Prepended to the prompt at every generation site so the style applies to
+    single, bulk and refs paths alike. Never raises - a missing style must not
+    break generation.
+    """
+    if not yt_channel_id:
+        return ''
+    try:
+        row = autoclip_db.get_db().execute(
+            "SELECT thumbnail_style FROM channels WHERE youtube_channel_id=?",
+            (yt_channel_id,)
+        ).fetchone()
+        return (dict(row).get('thumbnail_style') or '').strip() if row else ''
+    except Exception as _e:
+        app.logger.warning(f'thumbnail style lookup failed: {_e}')
+        return ''
 def generate_thumbnail():
     """Generate a thumbnail image via gpt-image-1, save to GCS, register in library."""
     data = request.json or {}
@@ -2111,6 +2129,9 @@ def generate_thumbnail():
         'horizontally and 87% vertically - the image will be cropped to 16:9 for YouTube, '
         'so anything within ~7% of any edge WILL be cut off. Leave those edges as background.'
     )
+    _style = _channel_thumbnail_style(yt_channel_id)
+    if _style:
+        base_prompt = f'CHANNEL STYLE (apply to all thumbnails): {_style}\n' + base_prompt
     prompt = (guidance + '. ' + base_prompt) if guidance else base_prompt
 
     response = client.images.generate(
@@ -3375,6 +3396,11 @@ def execute_all(session_id):
                     "Make it look like a premium college football YouTube thumbnail. "
                     "CRITICAL - NO LOGOS: Do NOT invent, draw, or include any logos, wordmarks, network bugs, team marks, helmet logos, or brand insignia of any kind. Generated logos look fake and are not the real channel branding. Use color, lighting, and typography for energy instead of logo-like marks."
                 )
+                _bstyle = _channel_thumbnail_style(channel_yt_id)
+                if _bstyle:
+                    thumb_prompt = (
+                        f"CHANNEL STYLE (apply to all thumbnails): {_bstyle}\n"
+                        + thumb_prompt)
                 _bu = autoclip_auth.get_current_user()
                 _bdb = autoclip_db.get_db()
                 _bok, _bwhy = plans.can_generate_thumbnail(_bu, _bdb, session_id, i)
@@ -3462,6 +3488,43 @@ def thumbnail_signed_redirect():
         return f'Failed: {e}', 500
 
 
+@app.route('/api/thumbnail-download')
+def thumbnail_key_download():
+    """Stream a thumbnail by GCS key with an attachment header so the browser
+    saves it instead of navigating to it. Mirrors the auth of
+    /api/thumbnail-url. The library route is keyed on thumbnails_library.id,
+    which the clips page does not have - it only has the key."""
+    key = request.args.get('key', '')
+    if not key or not key.startswith('thumbnails/'):
+        return 'Bad key', 400
+    user = autoclip_auth.get_current_user()
+    if not user:
+        return redirect(url_for('auth.login'))
+    parts = key.split('/')
+    if len(parts) < 3:
+        return 'Bad key', 400
+    yt_channel_id = parts[1]
+    if user['role'] != 'admin':
+        if not autoclip_db.user_has_channel_access_by_yt_id(user['id'], yt_channel_id):
+            return 'Forbidden', 403
+    try:
+        import io as _io
+        from flask import send_file as _send_file
+        data = gcs_storage.download_bytes(key)
+        ext = os.path.splitext(key)[1].lower() or '.png'
+        mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                '.webp': 'image/webp'}.get(ext, 'application/octet-stream')
+        base = os.path.basename(key)
+        base = re.sub(r'[^A-Za-z0-9._-]+', '_', base) or ('thumbnail' + ext)
+        name = request.args.get('name', '').strip()
+        if name:
+            name = re.sub(r'[^A-Za-z0-9._-]+', '_', name)
+            base = name if name.lower().endswith(ext) else name + ext
+        return _send_file(_io.BytesIO(data), mimetype=mime,
+                          as_attachment=True, download_name=base)
+    except Exception as e:
+        app.logger.exception('thumbnail key download failed')
+        return f'Failed: {e}', 500
 @app.route('/api/thumbnails/library')
 def thumbnails_library_list():
     """List thumbnails visible to the current user.
@@ -3927,6 +3990,110 @@ def channel_description_settings(channel_id):
     return jsonify({'ok': True, 'base_description': base, 'description_order': order})
 
 
+@app.route('/api/channels/<int:channel_id>/logo', methods=['POST', 'DELETE'])
+def channel_logo(channel_id):
+    """Upload or remove a channel's logo image (multipart field name: file)."""
+    user = autoclip_auth.get_current_user()
+    db = autoclip_db.get_db()
+    row = db.execute("SELECT * FROM channels WHERE id=?", (channel_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'not found'}), 404
+    if user['role'] != 'admin':
+        if not autoclip_db.user_has_channel_access(user['id'], channel_id):
+            return jsonify({'error': 'forbidden'}), 403
+    d = dict(row)
+    if request.method == 'DELETE':
+        old_key = d.get('logo_gcs_key')
+        db.execute("UPDATE channels SET logo_gcs_key=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                   (channel_id,))
+        db.commit()
+        if old_key:
+            try:
+                gcs_storage.delete_from_gcs(old_key)
+            except Exception as _e:
+                app.logger.warning(f'logo delete failed for {old_key}: {_e}')
+        return jsonify({'ok': True, 'has_logo': False})
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return jsonify({'error': 'no file'}), 400
+    ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'png'
+    if ext not in ('png', 'jpg', 'jpeg', 'webp'):
+        return jsonify({'error': 'logo must be png, jpg or webp'}), 400
+    data = f.read()
+    if len(data) > 5 * 1024 * 1024:
+        return jsonify({'error': 'logo must be under 5 MB'}), 400
+    mime = {'png': 'image/png', 'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg', 'webp': 'image/webp'}[ext]
+    yt_id = d.get('youtube_channel_id') or str(channel_id)
+    key = f"logos/{yt_id}/logo.{ext}"
+    gcs_storage.upload_bytes_to_gcs(data, key, content_type=mime)
+    old_key = d.get('logo_gcs_key')
+    db.execute("UPDATE channels SET logo_gcs_key=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+               (key, channel_id))
+    db.commit()
+    if old_key and old_key != key:
+        try:
+            gcs_storage.delete_from_gcs(old_key)
+        except Exception as _e:
+            app.logger.warning(f'old logo delete failed for {old_key}: {_e}')
+    return jsonify({'ok': True, 'has_logo': True,
+                    'logo_url': f'/api/thumbnail-logo-url?channel_id={channel_id}'})
+@app.route('/api/thumbnail-logo-url')
+def channel_logo_url():
+    """Redirect to a short-lived signed URL for a channel's logo."""
+    user = autoclip_auth.get_current_user()
+    if not user:
+        return redirect(url_for('auth.login'))
+    try:
+        channel_id = int(request.args.get('channel_id', '0'))
+    except ValueError:
+        return 'Bad channel_id', 400
+    db = autoclip_db.get_db()
+    row = db.execute("SELECT logo_gcs_key FROM channels WHERE id=?", (channel_id,)).fetchone()
+    if not row or not row['logo_gcs_key']:
+        return 'not found', 404
+    if user['role'] != 'admin':
+        if not autoclip_db.user_has_channel_access(user['id'], channel_id):
+            return 'Forbidden', 403
+    try:
+        return redirect(gcs_storage.signed_url(row['logo_gcs_key'], expires_seconds=3600))
+    except Exception as e:
+        return f'Failed: {e}', 500
+@app.route('/api/channels/<int:channel_id>/thumbnail_settings', methods=['GET', 'POST'])
+def channel_thumbnail_settings(channel_id):
+    """GET or set a channel's thumbnail style description.
+
+    The style text is prepended to the prompt server-side at every generation
+    site, so it applies to single, bulk and refs paths alike. Per-segment
+    guidance still layers on top of it.
+    """
+    user = autoclip_auth.get_current_user()
+    db = autoclip_db.get_db()
+    row = db.execute("SELECT * FROM channels WHERE id=?", (channel_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'not found'}), 404
+    if user['role'] != 'admin':
+        if not autoclip_db.user_has_channel_access(user['id'], channel_id):
+            return jsonify({'error': 'forbidden'}), 403
+    d = dict(row)
+    if request.method == 'GET':
+        return jsonify({
+            'channel_id': channel_id,
+            'thumbnail_style': d.get('thumbnail_style') or '',
+            'has_logo': bool(d.get('logo_gcs_key')),
+            'logo_url': (f"/api/thumbnail-logo-url?channel_id={channel_id}"
+                         if d.get('logo_gcs_key') else None),
+        })
+    payload = request.get_json(silent=True) or {}
+    style = (payload.get('thumbnail_style') or '').strip()
+    if len(style) > 2000:
+        return jsonify({'error': 'thumbnail_style max 2000 chars'}), 400
+    db.execute(
+        "UPDATE channels SET thumbnail_style=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (style or None, channel_id)
+    )
+    db.commit()
+    return jsonify({'ok': True, 'thumbnail_style': style})
 @app.route('/api/ads/library/<int:ad_id>/set_role', methods=['POST'])
 def ads_library_set_role(ad_id):
     """Assign this ad as intro or outro for its channel, or clear.
@@ -4434,6 +4601,10 @@ def generate_thumbnail_with_refs():
             "wordmarks, network bugs, team marks, or brand insignia that are not "
             "present in the references."
         )
+        _rstyle = _channel_thumbnail_style(session.get('channel_youtube_id'))
+        if _rstyle:
+            base_prompt = (f"CHANNEL STYLE (apply to all thumbnails): {_rstyle} "
+                           + base_prompt)
         prompt = (guidance + " " + base_prompt) if guidance else base_prompt
 
         # Open files as binary for the API call

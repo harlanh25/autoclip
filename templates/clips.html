@@ -311,6 +311,8 @@
               <div class="thumb-empty" id="thumb-img-{{ idx }}-empty">No thumbnail yet</div>
               {% endif %}
             </div>
+            <button type="button" class="btn-secondary" style="width:100%;margin-bottom:0.5rem;"
+                    onclick="downloadThumbnail({{ idx }})">Download thumbnail</button>
 
             <!-- REF IMAGES -->
             <div class="ref-images-section">
@@ -718,6 +720,38 @@
     }
   }
 
+  function downloadThumbnail(idx) {
+    // Read the live img src rather than a server-rendered value: regenerating
+    // replaces the preview innerHTML, so a static link would go stale.
+    const img = document.querySelector('#seg-' + idx + ' .thumb-preview img');
+    const src = img ? img.getAttribute('src') : '';
+    if (!src) {
+      setStatus('thumb-status-' + idx, 'No thumbnail to download yet.', 'error');
+      return;
+    }
+    const m = src.match(/[?&]key=([^&]+)/);
+    if (!m) {
+      // Legacy local-disk thumbnail (session had no channel) - fetch directly.
+      const a = document.createElement('a');
+      a.href = src;
+      a.download = 'thumbnail_' + (idx + 1) + '.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+    const key = m[1];
+    const titleEl = document.getElementById('title-' + idx);
+    const nice = (titleEl && titleEl.value ? titleEl.value : 'thumbnail_' + (idx + 1))
+      .slice(0, 60);
+    const url = '/api/thumbnail-download?key=' + encodeURIComponent(decodeURIComponent(key))
+      + '&name=' + encodeURIComponent(nice);
+    const a = document.createElement('a');
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
   async function uploadThumbnail(idx, fileInput) {
     if (!fileInput.files[0]) return;
     const fd = new FormData();

@@ -134,6 +134,31 @@
           <span class="desc-status" id="desc-status-{{ ch.id }}"></span>
         </div>
       </div>
+      <button class="desc-toggle" onclick="toggleThumb({{ ch.id }})" type="button">
+        <span>Thumbnail settings</span>
+        <span id="thumb-caret-{{ ch.id }}">&#9656;</span>
+      </button>
+      <div class="desc-panel" id="thumb-panel-{{ ch.id }}">
+        <label class="desc-lbl">Thumbnail style
+          <span class="desc-hint">Applied to every thumbnail generated for this channel.</span>
+        </label>
+        <textarea id="thumb-style-{{ ch.id }}" rows="5"
+                  placeholder="e.g. Garnet and gold color scheme, heavy bold condensed type, dark stadium background, high contrast, no clutter."></textarea>
+        <label class="desc-lbl" style="margin-top:.75rem;">Channel logo
+          <span class="desc-hint">Used only when &quot;Include channel logo&quot; is checked at generation.</span>
+        </label>
+        <div class="desc-row" style="align-items:center;gap:.75rem;">
+          <img id="logo-preview-{{ ch.id }}" alt="" style="display:none;max-height:48px;border-radius:6px;background:var(--bg3);">
+          <input type="file" id="logo-file-{{ ch.id }}" accept="image/png,image/jpeg,image/webp"
+                 onchange="uploadLogo({{ ch.id }}, this)" style="font-size:.85rem;">
+          <button class="desc-save-btn" type="button" id="logo-del-{{ ch.id }}"
+                  style="display:none;" onclick="deleteLogo({{ ch.id }})">Remove</button>
+        </div>
+        <div class="desc-row">
+          <button class="desc-save-btn" onclick="saveThumb({{ ch.id }})" type="button">Save</button>
+          <span class="desc-status" id="thumb-status-{{ ch.id }}"></span>
+        </div>
+      </div>
     </div>
     {% endfor %}
   </div>
@@ -192,6 +217,94 @@
       setTimeout(() => { if (status.textContent === '\u2713 saved') status.textContent = ''; }, 1500);
     } catch (e) {
       status.textContent = 'Save failed: ' + (e.message || e);
+      status.style.color = '#f87171';
+    }
+  }
+  const __thumbLoaded = {};
+  async function toggleThumb(chId) {
+    const panel = document.getElementById('thumb-panel-' + chId);
+    const caret = document.getElementById('thumb-caret-' + chId);
+    const open = panel.classList.toggle('open');
+    caret.innerHTML = open ? '&#9662;' : '&#9656;';
+    if (open && !__thumbLoaded[chId]) {
+      __thumbLoaded[chId] = true;
+      try {
+        const r = await fetch('/api/channels/' + chId + '/thumbnail_settings');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        document.getElementById('thumb-style-' + chId).value = j.thumbnail_style || '';
+        __setLogoUI(chId, j.has_logo, j.logo_url);
+      } catch (e) {
+        document.getElementById('thumb-status-' + chId).textContent = 'Load failed: ' + (e.message || e);
+        __thumbLoaded[chId] = false;
+      }
+    }
+  }
+  function __setLogoUI(chId, hasLogo, logoUrl) {
+    const img = document.getElementById('logo-preview-' + chId);
+    const del = document.getElementById('logo-del-' + chId);
+    if (hasLogo && logoUrl) {
+      img.src = logoUrl + '&t=' + Date.now();
+      img.style.display = '';
+      del.style.display = '';
+    } else {
+      img.style.display = 'none';
+      del.style.display = 'none';
+    }
+  }
+  async function saveThumb(chId) {
+    const status = document.getElementById('thumb-status-' + chId);
+    status.textContent = 'Saving\u2026';
+    status.style.color = 'var(--muted)';
+    try {
+      const r = await fetch('/api/channels/' + chId + '/thumbnail_settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          thumbnail_style: document.getElementById('thumb-style-' + chId).value
+        })
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || 'HTTP ' + r.status);
+      }
+      status.textContent = '\u2713 saved';
+      setTimeout(() => { if (status.textContent === '\u2713 saved') status.textContent = ''; }, 1500);
+    } catch (e) {
+      status.textContent = 'Save failed: ' + (e.message || e);
+      status.style.color = '#f87171';
+    }
+  }
+  async function uploadLogo(chId, input) {
+    if (!input.files || !input.files[0]) return;
+    const status = document.getElementById('thumb-status-' + chId);
+    status.textContent = 'Uploading logo\u2026';
+    status.style.color = 'var(--muted)';
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    try {
+      const r = await fetch('/api/channels/' + chId + '/logo', {method: 'POST', body: fd});
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+      __setLogoUI(chId, true, j.logo_url);
+      status.textContent = '\u2713 logo saved';
+      setTimeout(() => { if (status.textContent === '\u2713 logo saved') status.textContent = ''; }, 1500);
+    } catch (e) {
+      status.textContent = 'Logo upload failed: ' + (e.message || e);
+      status.style.color = '#f87171';
+    }
+    input.value = '';
+  }
+  async function deleteLogo(chId) {
+    const status = document.getElementById('thumb-status-' + chId);
+    try {
+      const r = await fetch('/api/channels/' + chId + '/logo', {method: 'DELETE'});
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      __setLogoUI(chId, false, null);
+      status.textContent = 'logo removed';
+      setTimeout(() => { if (status.textContent === 'logo removed') status.textContent = ''; }, 1500);
+    } catch (e) {
+      status.textContent = 'Remove failed: ' + (e.message || e);
       status.style.color = '#f87171';
     }
   }
