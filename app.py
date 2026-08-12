@@ -135,6 +135,11 @@ app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10GB max upload
 OPENAI_API_KEY   = os.environ.get("OPENAI_API_KEY", "")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY environment variable not set — configure it in systemd unit or /etc/environment")
+# gpt-image-1 is removed from the OpenAI API on 2026-10-23.
+# gpt-image-2 at 1536x1024/high is ~1.9x slower (95s vs 51s) but clearly
+# better, especially at rendering text. ~$0.165/image.
+# Note: gpt-image-2 rejects input_fidelity - it always uses high fidelity.
+IMAGE_MODEL = os.environ.get('AUTOCLIP_IMAGE_MODEL', 'gpt-image-2')
 YOUTUBE_API_KEY  = "AIzaSyAO6a2xvRYpaVKD27hDzHWPvfxyk7vmB4s"
 
 BASE_DIR         = Path(__file__).parent
@@ -1957,6 +1962,14 @@ def generate_thumbnail():
     session_id = data.get('session_id')
     segment_index = data.get('segment_index')
 
+    _u = autoclip_auth.get_current_user()
+    _db = autoclip_db.get_db()
+    _ok, _why = plans.can_generate_thumbnail(
+        _u, _db, session_id,
+        int(segment_index) if segment_index is not None else None)
+    if not _ok:
+        return jsonify({'error': _why, 'upgrade_url': '/pricing'}), 402
+
     yt_channel_id = None
     if session_id and segment_index is not None:
         sess = load_session(session_id)
@@ -1980,12 +1993,16 @@ def generate_thumbnail():
     prompt = (guidance + '. ' + base_prompt) if guidance else base_prompt
 
     response = client.images.generate(
-        model='gpt-image-1',
+        model=IMAGE_MODEL,
         prompt=prompt,
         size='1536x1024',
         quality='high',
         n=1
     )
+    plans.log_thumbnail_generation(
+        _db, _u['id'], session_id,
+        int(segment_index) if segment_index is not None else None,
+        IMAGE_MODEL, 'high')
     import base64
     image_b64 = response.data[0].b64_json
     image_bytes = base64.b64decode(image_b64)
@@ -3131,13 +3148,21 @@ def execute_all(session_id):
                     "Dramatic lighting. Text overlay space. No people required, focus on energy and drama. "
                     "Make it look like a premium college football YouTube thumbnail."
                 )
+                _bu = autoclip_auth.get_current_user()
+                _bdb = autoclip_db.get_db()
+                _bok, _bwhy = plans.can_generate_thumbnail(_bu, _bdb, session_id, i)
+                if not _bok:
+                    summary['errors'].append(f'Segment {i+1} thumbnail: {_bwhy}')
+                    raise RuntimeError(_bwhy)
                 img_resp = client.images.generate(
-                    model='gpt-image-1',
+                    model=IMAGE_MODEL,
                     prompt=thumb_prompt,
                     size='1536x1024',
                     quality='high',
                     n=1
                 )
+                plans.log_thumbnail_generation(_bdb, _bu['id'], session_id, i,
+                                               IMAGE_MODEL, 'high')
                 image_bytes = base64.b64decode(img_resp.data[0].b64_json)
                 image_bytes = _resize_thumbnail_to_youtube(image_bytes)
                 digest = hashlib.md5(image_bytes).hexdigest()[:12]
@@ -4095,6 +4120,12 @@ def generate_thumbnail_with_refs():
         return jsonify({'error': 'session or segment not found'}), 404
     segment = session['segments'][segment_index]
 
+    _ru = autoclip_auth.get_current_user()
+    _rdb = autoclip_db.get_db()
+    _rok, _rwhy = plans.can_generate_thumbnail(_ru, _rdb, session_id, segment_index)
+    if not _rok:
+        return jsonify({'error': _rwhy, 'upgrade_url': '/pricing'}), 402
+
     yt_channel_id = session.get('channel_youtube_id')
     if not yt_channel_id:
         return jsonify({'error': 'session has no channel_youtube_id'}), 400
@@ -4178,13 +4209,15 @@ def generate_thumbnail_with_refs():
         file_handles = [open(p, 'rb') for p in tmp_paths]
         try:
             response = client.images.edit(
-                model="gpt-image-1",
+                model=IMAGE_MODEL,
                 image=file_handles if len(file_handles) > 1 else file_handles[0],
                 prompt=prompt,
                 size="1536x1024",
                 quality="high",
                 n=1
             )
+            plans.log_thumbnail_generation(_rdb, _ru['id'], session_id,
+                                           segment_index, IMAGE_MODEL, 'high')
         finally:
             for fh in file_handles:
                 try:

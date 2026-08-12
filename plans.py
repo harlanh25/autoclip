@@ -321,3 +321,84 @@ def usage_context(user, db=None):
             if is_demo_video else None
         ),
     }
+
+
+# __THUMBNAIL_CAPS_V1__
+# ─────────────────────────────────────────────────────────────
+# Thumbnail generation caps.
+#   monthly pool = 1.5x the tier's clip cap
+#   per-segment  = 3 attempts, so a difficult clip can be retried
+# gpt-image-2 at 1536x1024 high is ~$0.165/image, the single largest
+# variable cost per clip, so these are real money not just abuse control.
+# ─────────────────────────────────────────────────────────────
+
+THUMB_POOL_MULTIPLIER = 1.5
+THUMB_PER_SEGMENT_MAX = 3
+THUMB_EST_COST_USD = 0.165
+THUMB_DEMO_POOL = 9          # demo: 3 sessions x 3 attempts
+
+
+def thumbnail_pool_for_user(user):
+    """Monthly generation allowance. None = unlimited (founders/admin)."""
+    if not user:
+        return 0
+    tier = user.get('video_tier') or 'demo'
+    if tier == 'demo':
+        return THUMB_DEMO_POOL
+    cap = video_cap_for_user(user)
+    if not cap:
+        return None
+    return int(cap * THUMB_POOL_MULTIPLIER)
+
+
+def thumbnails_used_this_month(db, user_id):
+    row = db.execute(
+        "SELECT COUNT(*) FROM thumbnail_generations "
+        "WHERE user_id=? AND strftime('%Y-%m', created_at) = strftime('%Y-%m','now')",
+        (user_id,)
+    ).fetchone()
+    return row[0] if row else 0
+
+
+def thumbnails_used_for_segment(db, session_id, segment_index):
+    row = db.execute(
+        "SELECT COUNT(*) FROM thumbnail_generations "
+        "WHERE session_id=? AND segment_index=?",
+        (session_id, segment_index)
+    ).fetchone()
+    return row[0] if row else 0
+
+
+def can_generate_thumbnail(user, db, session_id=None, segment_index=None):
+    """Return (ok, reason). Checks per-segment then monthly pool."""
+    if not user:
+        return False, 'Not logged in.'
+    if user.get('role') == 'admin':
+        return True, None
+
+    if session_id is not None and segment_index is not None:
+        used = thumbnails_used_for_segment(db, session_id, segment_index)
+        if used >= THUMB_PER_SEGMENT_MAX:
+            return False, (f'This clip has used all {THUMB_PER_SEGMENT_MAX} thumbnail '
+                           f'generations. Upload your own image instead.')
+
+    pool = thumbnail_pool_for_user(user)
+    if pool is None:
+        return True, None
+    used = thumbnails_used_this_month(db, user['id'])
+    if used >= pool:
+        return False, (f'Monthly thumbnail limit reached ({pool}). '
+                       f'Upgrade for more, or upload your own image.')
+    return True, None
+
+
+def log_thumbnail_generation(db, user_id, session_id=None, segment_index=None,
+                             model=None, quality=None):
+    """Record a generation for cap enforcement and cost tracking."""
+    db.execute(
+        "INSERT INTO thumbnail_generations "
+        "(user_id, session_id, segment_index, model, quality, est_cost_usd) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (user_id, session_id, segment_index, model, quality, THUMB_EST_COST_USD)
+    )
+    db.commit()
