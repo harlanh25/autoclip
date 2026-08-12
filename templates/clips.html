@@ -409,10 +409,11 @@
           <div class="yt-row">
             <div class="yt-label">Monetize</div>
             <div class="yt-control">
-              <label class="yt-checkbox-single">
-                <input type="checkbox" id="yt-monetize-{{ idx }}">
-                <span>Enable ads on this video (channel must be in YPP)</span>
-              </label>
+              <div style="color:var(--muted);font-size:.8rem;line-height:1.5;">
+                Monetization can't be set through the YouTube API &mdash; it's a
+                YouTube Studio setting. Turn ads on for this video in Studio
+                after it publishes.
+              </div>
             </div>
           </div>
 
@@ -807,7 +808,6 @@
       tags: document.getElementById('yt-tags-'+idx).value || '',
       made_for_kids: document.getElementById('yt-mfk-'+idx).checked,
       publish_at: publishAt,
-      monetize: document.getElementById('yt-monetize-'+idx).checked,
       playlist_ids: playlistIds,
     };
   }
@@ -826,7 +826,6 @@
         tags: ytSettings.tags,
         made_for_kids: ytSettings.made_for_kids,
         publish_at: ytSettings.publish_at,
-        monetize: ytSettings.monetize,
         playlist_ids: ytSettings.playlist_ids,
       })
     });
@@ -1241,7 +1240,6 @@
       tags: _yt.tags,
       made_for_kids: _yt.made_for_kids,
       publish_at: _yt.publish_at,
-      monetize: _yt.monetize,
       playlist_ids: _yt.playlist_ids,
     };
     if (btn) { btn.disabled = true; btn.textContent = 'Queuing…'; }
