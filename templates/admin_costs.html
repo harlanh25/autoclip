@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Costs & Margin — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root { --accent:#2563eb; --accent-light:#3b82f6; --bg:#07070f; --bg2:#0e0e1a;
+          --bg3:#14141f; --border:#1e1e2e; --text:#e8e8f0; --muted:#6b6b8a; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sans-serif; min-height:100vh; }
+  .container { max-width:1200px; margin:2.5rem auto; padding:0 2rem; }
+  h1 { font-size:1.75rem; font-weight:800; letter-spacing:-.02em; }
+  .sub { color:var(--muted); font-size:.9rem; margin-top:.25rem; }
+  .controls { display:flex; gap:.75rem; align-items:center; margin:1.5rem 0; flex-wrap:wrap; }
+  .controls select, .controls a {
+    background:var(--bg3); color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:.45rem .8rem; font-size:.85rem; text-decoration:none;
+    font-family:inherit; }
+  .controls a.on { border-color:var(--accent); color:var(--accent-light); }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr)); gap:.9rem; margin-bottom:2rem; }
+  .kpi { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:1rem 1.1rem; }
+  .kpi .label { font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:.4rem; }
+  .kpi .val { font-size:1.5rem; font-weight:700; letter-spacing:-.02em; }
+  .kpi .note { font-size:.72rem; color:var(--muted); margin-top:.25rem; }
+  .pos { color:#4ade80; } .neg { color:#f87171; } .warn { color:#fbbf24; }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  th { text-align:left; padding:.6rem .5rem; color:var(--muted); font-weight:600;
+       font-size:.72rem; text-transform:uppercase; letter-spacing:.05em;
+       border-bottom:1px solid var(--border); }
+  th.r, td.r { text-align:right; }
+  td { padding:.65rem .5rem; border-bottom:1px solid var(--border); }
+  tr:hover td { background:rgba(255,255,255,.02); }
+  .email { color:var(--muted); font-size:.78rem; }
+  .tier { font-size:.68rem; padding:.15rem .5rem; border-radius:10px;
+          background:rgba(107,107,138,.18); color:var(--muted); }
+  .tier.paid { background:rgba(37,99,235,.16); color:var(--accent-light); }
+  .empty { background:var(--bg2); border:2px dashed var(--border); border-radius:12px;
+           padding:2.5rem; text-align:center; color:var(--muted); }
+</style></head><body>
+
+{% set active = 'admin' %}
+{% include '_nav.html' with context %}
+
+<div class="container">
+  <h1>Costs &amp; Margin</h1>
+  <div class="sub">Variable cost tracked per user. Fixed platform cost is applied at the total level only.</div>
+
+  <div class="controls">
+    <select onchange="location.href='/admin/costs?month='+this.value+'{{ '&founders=include' if not exclude_founders else '' }}'">
+      <option value="">Current month</option>
+      {% for m in months %}
+      <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+    {% if exclude_founders %}
+      <a href="/admin/costs?founders=include{{ '&month=' ~ selected_month if selected_month }}">Founders excluded — show all</a>
+    {% else %}
+      <a class="on" href="/admin/costs{{ '?month=' ~ selected_month if selected_month }}">Showing all — exclude founders</a>
+    {% endif %}
+  </div>
+
+  {% set s = report.summary %}
+  <div class="kpis">
+    <div class="kpi"><div class="label">Revenue</div>
+      <div class="val">${{ '%.2f'|format(s.revenue) }}</div>
+      <div class="note">{{ s.paying_users }} paying</div></div>
+    <div class="kpi"><div class="label">Variable cost</div>
+      <div class="val">${{ '%.2f'|format(s.variable_cost) }}</div>
+      <div class="note">tracked usage</div></div>
+    <div class="kpi"><div class="label">Gross profit</div>
+      <div class="val {{ 'pos' if s.gross_profit >= 0 else 'neg' }}">${{ '%.2f'|format(s.gross_profit) }}</div>
+      <div class="note">{% if s.gross_margin_pct is not none %}{{ '%.1f'|format(s.gross_margin_pct) }}% margin{% else %}—{% endif %}</div></div>
+    <div class="kpi"><div class="label">Fixed cost</div>
+      <div class="val">${{ '%.2f'|format(s.fixed_cost) }}</div>
+      <div class="note">VM, disk, IP</div></div>
+    <div class="kpi"><div class="label">Net profit</div>
+      <div class="val {{ 'pos' if s.net_profit >= 0 else 'neg' }}">${{ '%.2f'|format(s.net_profit) }}</div>
+      <div class="note">{% if s.net_margin_pct is not none %}{{ '%.1f'|format(s.net_margin_pct) }}% margin{% else %}—{% endif %}</div></div>
+    <div class="kpi"><div class="label">Free users</div>
+      <div class="val {{ 'warn' if s.free_user_cost > 0 else '' }}">{{ s.free_users }}</div>
+      <div class="note">costing ${{ '%.2f'|format(s.free_user_cost) }}</div></div>
+  </div>
+
+  {% if report.users %}
+  <table>
+    <thead><tr>
+      <th>User</th><th>Video</th><th>Audio</th>
+      <th class="r">Revenue</th><th class="r">Cost</th><th class="r">Profit</th>
+      <th class="r">Margin</th><th class="r">Events</th>
+    </tr></thead>
+    <tbody>
+      {% for u in report.users %}
+      <tr>
+        <td><strong>{{ u.name or u.email }}</strong><div class="email">{{ u.email }}</div></td>
+        <td><span class="tier {{ 'paid' if u.video_tier != 'demo' }}">{{ u.video_tier }}</span></td>
+        <td><span class="tier {{ 'paid' if u.audio_tier != 'demo' }}">{{ u.audio_tier }}</span></td>
+        <td class="r">${{ '%.2f'|format(u.revenue) }}</td>
+        <td class="r">${{ '%.2f'|format(u.cost) }}</td>
+        <td class="r {{ 'pos' if u.profit >= 0 else 'neg' }}">${{ '%.2f'|format(u.profit) }}</td>
+        <td class="r">{% if u.margin_pct is not none %}<span class="{{ 'pos' if u.margin_pct >= 40 else ('warn' if u.margin_pct >= 0 else 'neg') }}">{{ '%.0f'|format(u.margin_pct) }}%</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="r">{{ u.events }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No usage recorded for this period yet.</div>
+  {% endif %}
+</div>
+</body></html>

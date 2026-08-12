@@ -402,3 +402,11 @@ def log_thumbnail_generation(db, user_id, session_id=None, segment_index=None,
         (user_id, session_id, segment_index, model, quality, THUMB_EST_COST_USD)
     )
     db.commit()
+    # Mirror into usage_events so the margin report sees it. Kept as two
+    # tables because thumbnail_generations backs the per-segment cap.
+    try:
+        import costs as _costs
+        _costs.record_image(db, user_id, model,
+                            session_id=session_id, segment_index=segment_index)
+    except Exception:
+        pass

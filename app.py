@@ -140,6 +140,9 @@ if not OPENAI_API_KEY:
 # gpt-image-2 at 1536x1024/high is ~1.9x slower (95s vs 51s) but clearly
 # better, especially at rendering text. ~$0.165/image.
 # Note: gpt-image-2 rejects input_fidelity - it always uses high fidelity.
+# Founder/admin accounts excluded from revenue totals by default -
+# they pay nothing, so counting their tier as revenue would be fiction.
+ADMIN_USER_IDS = {1, 2}
 IMAGE_MODEL = os.environ.get('AUTOCLIP_IMAGE_MODEL', 'gpt-image-2')
 YOUTUBE_API_KEY  = "AIzaSyAO6a2xvRYpaVKD27hDzHWPvfxyk7vmB4s"
 
@@ -1228,6 +1231,18 @@ def _finish_publish_job(job_id):
             local_composed = _os_v42y.path.join(_tmp, 'composed.mp4')
             gcs_storage.download_from_gcs(composed_key, local_composed)
 
+            # Cost: pulling the composed file out of GCS is billable egress
+            try:
+                _gb = _os_v42y.path.getsize(local_composed) / (1024 ** 3)
+                _uid = job.get('user_id') if hasattr(job, 'get') else job['user_id']
+                if _uid:
+                    costs.record_egress(db, _uid, _gb,
+                                        session_id=job['session_id'],
+                                        segment_index=job['segment_index'],
+                                        detail='composed->youtube')
+            except Exception:
+                app.logger.exception('egress cost record failed')
+
             # Do the YouTube upload — mirror worker.py logic
             db.execute("UPDATE publish_jobs SET stage='uploading_youtube', progress_pct=95, heartbeat_at=CURRENT_TIMESTAMP WHERE id=?", (job_id,))
             db.commit()
@@ -2271,6 +2286,65 @@ def channels_page():
     else:
         channels = autoclip_db.list_channels_for_user(user['id'])
     return render_template('channels.html', current_user=user, channels=channels)
+
+
+
+# __ADMIN_COSTS_V1__
+@app.route('/admin/costs')
+def admin_costs():
+    """Admin-only: per-user cost, revenue and margin for a month."""
+    user = autoclip_auth.get_current_user()
+    if not user or user['role'] != 'admin':
+        return "Forbidden", 403
+    db = autoclip_db.get_db()
+    month = request.args.get('month') or None
+    exclude_founders = request.args.get('founders') != 'include'
+
+    report = costs.margin_report(db, plans, month)
+
+    if exclude_founders:
+        keep = [u for u in report['users'] if u['id'] not in ADMIN_USER_IDS]
+        rev = sum(u['revenue'] for u in keep)
+        cost = sum(u['cost'] for u in keep)
+        gross = rev - cost
+        net = gross - costs.FIXED_MONTHLY
+        paying = [u for u in keep if u['is_paying']]
+        report = {
+            'month': report['month'],
+            'users': keep,
+            'summary': {
+                'revenue': rev, 'variable_cost': cost,
+                'gross_profit': gross,
+                'gross_margin_pct': (gross / rev * 100) if rev else None,
+                'fixed_cost': costs.FIXED_MONTHLY,
+                'net_profit': net,
+                'net_margin_pct': (net / rev * 100) if rev else None,
+                'paying_users': len(paying),
+                'free_users': len(keep) - len(paying),
+                'free_user_cost': sum(u['cost'] for u in keep if not u['is_paying']),
+                'breakeven_users': None,
+            },
+        }
+
+    return render_template(
+        'admin_costs.html',
+        current_user=user,
+        report=report,
+        months=costs.available_months(db),
+        selected_month=month,
+        exclude_founders=exclude_founders,
+    )
+
+
+@app.route('/api/admin/costs/<int:target_user_id>')
+def admin_user_cost_detail(target_user_id):
+    """Admin-only: one user's cost broken down by kind."""
+    user = autoclip_auth.get_current_user()
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'forbidden'}), 403
+    db = autoclip_db.get_db()
+    month = request.args.get('month') or None
+    return jsonify(costs.user_costs(db, target_user_id, month))
 
 
 @app.route('/admin/users')
