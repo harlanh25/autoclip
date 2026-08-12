@@ -1181,6 +1181,15 @@
     const res = document.getElementById(`publish-card-result-${idx}`);
     const title = document.getElementById(`publish-card-title-${idx}`);
 
+    // Reset everything a previous render may have set. The card is reused on
+    // retry, so without this a failed attempt's error text and red bar survive
+    // into the next attempt's success state.
+    st.style.color = '';
+    bar.style.background = '';
+    err.style.display = 'none';
+    err.textContent = '';
+    res.style.display = 'none';
+    res.innerHTML = '';
     st.textContent = job.status;
     bar.style.width = (job.progress_pct || 0) + '%';
     stg.textContent = stageLabel(job.stage);

@@ -606,12 +606,44 @@
     document.getElementById('proceed-btn').style.display = 'block';
   }
 
-  function updateSegment(index, field, value) {
-    // Update happens server-side on proceed
-    log(`Updated segment ${index+1} ${field} to ${value}`);
+  const pendingSaves = new Set();
+  async function updateSegment(index, field, value) {
+    const apiField = { start_time: 'start', end_time: 'end' }[field] || field;
+    const body = { segment_index: index };
+    body[apiField] = value;
+    const p = (async () => {
+      try {
+        const r = await fetch(`/api/update_segment/${SESSION_ID}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          log(`Save failed seg ${index+1} ${field}: ${j.error || r.status}`);
+          alert(`Could not save segment ${index+1}: ${j.error || 'server error'}`);
+          return;
+        }
+        log(`Saved segment ${index+1} ${field} = ${value}`);
+      } catch (e) {
+        log(`Save failed seg ${index+1} ${field}: ${e}`);
+        alert(`Could not save segment ${index+1}: ${e}`);
+      }
+    })();
+    pendingSaves.add(p);
+    p.finally(() => pendingSaves.delete(p));
+    return p;
   }
 
-  function proceedToClips() {
+  async function proceedToClips() {
+    if (document.activeElement && document.activeElement.blur) {
+      document.activeElement.blur();
+    }
+    await new Promise(r => setTimeout(r, 0));
+    if (pendingSaves.size) {
+      log(`Waiting for ${pendingSaves.size} pending save(s)...`);
+      await Promise.allSettled([...pendingSaves]);
+    }
     window.location.href = `/clips/${SESSION_ID}`;
   }
 </script>

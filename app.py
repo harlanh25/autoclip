@@ -1406,9 +1406,15 @@ def _finish_publish_job(job_id):
                     except Exception as _pe:
                         app.logger.warning(f'Failed to add to playlist {_pid}: {_pe}')
 
-            # Cleanup GCS temp composed
+            # Cleanup GCS temp composed.
+            # GUARD: the no-ads passthrough path sets composed_gcs_key to the
+            # segment's own clip_gcs_key. Deleting that destroys the user's clip.
+            _skip_cleanup = (composed_key == (segment.get('clip_gcs_key') or '__no_clip__'))
+            if _skip_cleanup:
+                app.logger.info(f'job {job_id}: passthrough publish, not deleting source clip {composed_key}')
             try:
-                gcs_storage.delete_from_gcs(composed_key, bucket_name=composed_bucket)
+                if not _skip_cleanup:
+                    gcs_storage.delete_from_gcs(composed_key, bucket_name=composed_bucket)
             except AttributeError:
                 # If delete helper doesn't exist, cleanup manually via client
                 try:
@@ -1703,6 +1709,29 @@ def publish_async_create(session_id):
 
     # Enqueue Cloud Task so GPU worker picks it up
     segment = session['segments'][segment_index]
+    # No ads selected -> nothing to compose. Skip the GPU worker entirely and
+    # hand the finisher the clip's own GCS key. The worker would raise
+    # RuntimeError('nothing to compose (no ads set)') on this input.
+    _has_ads = bool(
+        segment.get('intro_ad_id') or segment.get('mid_ad_id')
+        or segment.get('outro_ad_id') or (segment.get('extra_mid_ad_ids') or [])
+    )
+    if not _has_ads:
+        _clip_key = segment.get('clip_gcs_key')
+        if not _clip_key:
+            db.execute(
+                "UPDATE publish_jobs SET status='failed', error=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
+                ('No clip_gcs_key on segment', job_id))
+            db.commit()
+            return jsonify({'error': 'Segment has no clip file', 'job_id': job_id}), 400
+        db.execute(
+            "UPDATE publish_jobs SET status='running', stage='compose_done', "
+            "progress_pct=90, composed_gcs_key=?, composed_gcs_bucket=? WHERE id=?",
+            (_clip_key, 'autoclip-uploads', job_id))
+        db.commit()
+        app.logger.info(f'job {job_id}: no ads, passthrough publish of {_clip_key}')
+        _start_yt_finisher_once()
+        return jsonify({'job_id': job_id, 'status': 'pending'})
     try:
         _enqueue_publish_task(job_id, session_id, segment_index, segment, session)
     except Exception as _te:
@@ -2077,6 +2106,7 @@ def generate_thumbnail():
         'Style: Bold, high energy sports thumbnail. Dark or team-colored background. '
         'Dramatic lighting. Text overlay space. No people required, focus on energy and drama. '
         'Make it look like a premium college football YouTube thumbnail.\n'
+        'CRITICAL - NO LOGOS: Do NOT invent, draw, or include any logos, wordmarks, network bugs, team marks, helmet logos, or brand insignia of any kind. Generated logos look fake and are not the real channel branding. Use color, lighting, and typography for energy instead of logo-like marks.\n'
         'IMPORTANT LAYOUT: Keep ALL text and important faces inside the center 87% '
         'horizontally and 87% vertically - the image will be cropped to 16:9 for YouTube, '
         'so anything within ~7% of any edge WILL be cut off. Leave those edges as background.'
@@ -3081,6 +3111,25 @@ def update_segment(session_id):
         segment['start_time'] = float(data['start'])
     if 'end' in data:
         segment['end_time'] = float(data['end'])
+    # A time change invalidates any clip already cut from the old boundaries.
+    # execute_all only cuts when clip_gcs_key is missing, so clearing it here
+    # is what makes the re-cut happen. Without this the user edits the times,
+    # sees them saved, and still publishes the original cut.
+    if 'start' in data or 'end' in data:
+        try:
+            _s = float(segment.get('start_time') or 0)
+            _e = float(segment.get('end_time') or 0)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'start/end must be numeric'}), 400
+        if _e <= _s:
+            return jsonify({'error': f'end ({_e}) must be greater than start ({_s})'}), 400
+        if segment.get('clip_gcs_key') or segment.get('clip_path'):
+            app.logger.info(
+                f'segment {segment_index} of {session_id}: times changed, '
+                f'invalidating clip for re-cut')
+            segment['clip_gcs_key'] = None
+            segment['clip_path'] = None
+            segment['clip_file'] = None
 
     save_session(session_id, session)
     return jsonify({'status': 'updated', 'segment': segment})
@@ -3323,7 +3372,8 @@ def execute_all(session_id):
                     f"Topic: {_topic}\n"
                     "Style: Bold, high energy sports thumbnail. Dark or team-colored background. "
                     "Dramatic lighting. Text overlay space. No people required, focus on energy and drama. "
-                    "Make it look like a premium college football YouTube thumbnail."
+                    "Make it look like a premium college football YouTube thumbnail. "
+                    "CRITICAL - NO LOGOS: Do NOT invent, draw, or include any logos, wordmarks, network bugs, team marks, helmet logos, or brand insignia of any kind. Generated logos look fake and are not the real channel branding. Use color, lighting, and typography for energy instead of logo-like marks."
                 )
                 _bu = autoclip_auth.get_current_user()
                 _bdb = autoclip_db.get_db()
@@ -4378,7 +4428,11 @@ def generate_thumbnail_with_refs():
             f"Topic: {topic}. "
             "Bold, high energy sports style with dramatic lighting. "
             "Use the provided reference images as visual references for the people, "
-            "logos, or objects that should appear in the thumbnail."
+            "logos, or objects that should appear in the thumbnail. "
+            "CRITICAL - LOGOS: Reproduce ONLY logos that appear in the supplied "
+            "reference images. Do NOT invent, draw, or add any additional logos, "
+            "wordmarks, network bugs, team marks, or brand insignia that are not "
+            "present in the references."
         )
         prompt = (guidance + " " + base_prompt) if guidance else base_prompt
 
