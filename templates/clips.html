@@ -1231,11 +1231,18 @@
     const titleEl = document.getElementById('title-' + idx);
     const descEl = document.getElementById('description-' + idx);
     const privacyEl = document.getElementById('privacy-' + idx);
+    const _yt = collectYtSettings(idx);
     const payload = {
       segment_index: idx,
       title: titleEl ? titleEl.value : undefined,
       description: descEl ? descEl.value : undefined,
       privacy: privacyEl ? privacyEl.value : 'private',
+      category_id: _yt.category_id,
+      tags: _yt.tags,
+      made_for_kids: _yt.made_for_kids,
+      publish_at: _yt.publish_at,
+      monetize: _yt.monetize,
+      playlist_ids: _yt.playlist_ids,
     };
     if (btn) { btn.disabled = true; btn.textContent = 'Queuing…'; }
     try {

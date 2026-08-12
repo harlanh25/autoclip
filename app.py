@@ -1346,6 +1346,33 @@ def _finish_publish_job(job_id):
             session['segments'][job['segment_index']]['youtube_video_id'] = video_id
             save_session(job['session_id'], session)
 
+            # Set the custom thumbnail. YouTube requires a separate API call
+            # after upload - this was never implemented in the async path, so
+            # every clip published with the auto-generated YouTube frame.
+            try:
+                _seg_t = session['segments'][job['segment_index']]
+                _tkey = _seg_t.get('thumbnail_gcs_key')
+                if _tkey:
+                    _tdir = _tempfile_v42y.mkdtemp(prefix='autoclip_thumb_')
+                    _tlocal = _os_v42y.path.join(
+                        _tdir, 'thumb' + (_os_v42y.path.splitext(_tkey)[1] or '.png'))
+                    gcs_storage.download_from_gcs(_tkey, _tlocal)
+                    yt.thumbnails().set(
+                        videoId=video_id,
+                        media_body=MediaFileUpload(_tlocal)
+                    ).execute()
+                    app.logger.info('Finisher: thumbnail set on %s from %s',
+                                    video_id, _tkey)
+                    try:
+                        import shutil as _sh_t
+                        _sh_t.rmtree(_tdir, ignore_errors=True)
+                    except Exception:
+                        pass
+                else:
+                    app.logger.info('Finisher: no thumbnail_gcs_key on segment, skipping')
+            except Exception as _te:
+                app.logger.error('Finisher: thumbnail set failed for %s: %s', video_id, _te)
+
             db.execute(
                 "UPDATE publish_jobs "
                 "SET status='done', stage='complete', progress_pct=100, "
@@ -1603,6 +1630,39 @@ def publish_async_create(session_id):
         ).fetchone()
         if _ch and not autoclip_db.user_has_channel_access(user['id'], _ch['id']):
             return jsonify({'error': 'forbidden'}), 403
+
+    # Persist the YouTube publish settings onto the segment so the finisher
+    # can read them. publishAsync used to send only title/description/privacy,
+    # so segment['youtube'] stayed empty and monetization, playlists,
+    # category, tags and scheduling were all silently dropped.
+    try:
+        _seg = session['segments'][segment_index]
+        _ytset = dict(_seg.get('youtube') or {})
+        if 'title' in payload and payload['title'] is not None:
+            _ytset['title'] = payload['title']
+        if 'description' in payload and payload['description'] is not None:
+            _ytset['description'] = payload['description']
+        if payload.get('privacy'):
+            _ytset['privacy'] = payload['privacy']
+        if payload.get('category_id'):
+            _ytset['category_id'] = str(payload['category_id'])
+        if 'made_for_kids' in payload:
+            _ytset['made_for_kids'] = bool(payload['made_for_kids'])
+        if 'monetize' in payload:
+            _ytset['monetize'] = bool(payload['monetize'])
+        if payload.get('publish_at'):
+            _ytset['publish_at'] = payload['publish_at']
+        if 'playlist_ids' in payload:
+            _ytset['playlist_ids'] = [p for p in (payload.get('playlist_ids') or []) if p]
+        if 'tags' in payload:
+            _raw = payload.get('tags')
+            if isinstance(_raw, str):
+                _raw = [t.strip() for t in _raw.split(',')]
+            _ytset['tags'] = [t for t in (_raw or []) if t][:15]
+        _seg['youtube'] = _ytset
+        save_session(session_id, session)
+    except Exception:
+        app.logger.exception('failed to persist youtube settings on segment')
 
     db = autoclip_db.get_db()
 
