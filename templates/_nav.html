@@ -45,6 +45,7 @@
     <a href="/pricing" class="{% if active == 'pricing' %}active{% endif %}">Pricing</a>
     {% if current_user and current_user.role == 'admin' %}
     <a href="/admin/users" class="{% if active == 'admin' %}active{% endif %}">Admin</a>
+    <a href="/admin/costs" class="{% if active == 'costs' %}active{% endif %}">Costs</a>
     {% endif %}
   </div>
   <div class="nav-user">
