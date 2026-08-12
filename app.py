@@ -157,6 +157,19 @@ for d in [UPLOAD_DIR, ADS_DIR, THUMBS_DIR, CLIPS_DIR, SESSIONS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 client = OpenAI(api_key=OPENAI_API_KEY)
+# --- Anthropic (segment detection) ---
+# Lazy + fail-soft: a missing key or SDK must not stop the app from booting.
+# detect_segments falls back to gpt-4o when this is None.
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+SEGMENT_MODEL = os.environ.get('AUTOCLIP_SEGMENT_MODEL', 'claude-sonnet-5')
+anthropic_client = None
+if ANTHROPIC_API_KEY:
+    try:
+        import anthropic as _anthropic
+        anthropic_client = _anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    except Exception as _ae:
+        print(f'Anthropic client init failed, falling back to OpenAI: {_ae}')
+        anthropic_client = None
 
 # Title style guide for AI generation
 TITLE_STYLE_GUIDE = """
@@ -541,6 +554,54 @@ def transcribe(session_id):
     })
 
 
+def _snap_to_quote(transcript_segments, quote, which='start'):
+    """Find the transcript line containing `quote` and return its real timestamp.
+
+    Models are unreliable at converting [MM:SS] to seconds - a six-minute drift
+    was observed on a real episode. Asking for a verbatim quote and looking up
+    the timestamp ourselves removes the arithmetic from the model entirely.
+
+    Returns None when no confident match is found; the caller falls back to the
+    model's numeric estimate.
+    """
+    if not quote or not isinstance(quote, str):
+        return None
+
+    def norm(t):
+        return re.sub(r'[^a-z0-9 ]+', '', (t or '').lower()).strip()
+
+    q = norm(quote)
+    if len(q) < 12:
+        return None
+
+    # Build a normalized rolling text with an index back to each line.
+    lines = []
+    for ln in transcript_segments:
+        lines.append((norm(ln.get('text', '')), ln))
+
+    # 1. Direct containment in a single line.
+    for txt, ln in lines:
+        if q and q in txt:
+            return float(ln['start'] if which == 'start' else ln.get('end', ln['start']))
+
+    # 2. The quote may span consecutive lines - join a sliding window.
+    for i in range(len(lines)):
+        joined = lines[i][0]
+        for j in range(i + 1, min(i + 6, len(lines))):
+            joined = joined + ' ' + lines[j][0]
+            if q in joined:
+                if which == 'start':
+                    return float(lines[i][1]['start'])
+                return float(lines[j][1].get('end', lines[j][1]['start']))
+
+    # 3. Loose match on the first several words.
+    words = q.split()
+    if len(words) >= 5:
+        head = ' '.join(words[:5])
+        for txt, ln in lines:
+            if head in txt:
+                return float(ln['start'] if which == 'start' else ln.get('end', ln['start']))
+    return None
 @app.route('/api/detect_segments/<session_id>', methods=['POST'])
 def detect_segments(session_id):
     """
@@ -587,12 +648,13 @@ The user has listed the topics that were discussed, in the order they appear in 
 2. The moment the host stops discussing it and moves to the next topic (end_time in seconds).
 
 Rules:
-- The start of topic N is the end of topic N-1.
+- Do NOT assume topics are contiguous. A topic ENDS when the hosts actually stop discussing it, which is often BEFORE the next topic begins. Ad reads, sponsor segments, merch/housekeeping talk and channel promos sit BETWEEN topics and belong to NO topic. Leaving a gap between one topic's end_time and the next topic's start_time is correct and expected.
+- Do NOT stretch the first topic back to 00:00 unless it genuinely begins there.
 - STRONG SIGNAL: the hosts on this show reliably mark segment boundaries with phrases like "transition to", "let's transition", "transition over to", "our next segment", "final segment", "let's talk about", "let's jump to", "moving on to". When you see any of these, treat the timestamp AFTER the transition phrase completes as a very likely segment boundary.
 - If a strong signal phrase doesn't appear near where you'd expect a topic to start, fall back to content-based judgment (a shift in team names, subject, or discussion focus).
 - Ignore ad reads, sponsor mentions, and channel promos - these are not topics.
 - Timestamps must be in seconds (integers). Convert from [MM:SS] format: 2:06 = 126, 20:47 = 1247, etc.
-- The final topic ends at the total show duration ({int(total_duration)} seconds) or when the host says goodbye.
+- The final topic ends when the hosts stop discussing it - typically BEFORE the outro, sign-off, sponsor thanks and subscribe reminders. Do not extend it to the end of the show just to fill time.
 
 Topics to locate (in order):
 {topics_list}
@@ -603,9 +665,14 @@ Transcript:
 Return ONLY a JSON object with this structure:
 {{
   "segments": [
-    {{"topic": "...", "start_time": 0, "end_time": 126, "summary": "2-3 sentence summary of what was actually discussed"}}
+    {{"topic": "...", "start_time": 0, "end_time": 126, "start_quote": "...", "end_quote": "...", "summary": "2-3 sentence summary of what was actually discussed"}}
   ]
 }}
+
+start_quote and end_quote are MANDATORY and must be copied VERBATIM from the transcript above - do not paraphrase, do not reword, do not add or remove words. Copy 6-12 consecutive words exactly as they appear.
+- start_quote: the first words spoken in this topic.
+- end_quote: the last words spoken in this topic.
+These quotes are used to locate the exact timestamps, so an inexact copy will place the clip in the wrong spot.
 
 Return exactly {len(topics)} segments, one per topic listed, in the same order."""
     else:
@@ -616,11 +683,17 @@ Identify the distinct topical segments of the show. A segment is a sustained dis
 - Ad reads and sponsor mentions
 - Brief tangents that return to the main topic
 
+Segments are NOT contiguous. Ad reads, sponsor segments, merch/housekeeping and channel promos sit BETWEEN segments and belong to no segment - leave gaps.
+
 For each real segment, provide:
 1. A short topic name (3-6 words)
 2. start_time in seconds (integer)
 3. end_time in seconds (integer)
-4. A 2-3 sentence summary
+4. start_quote: 6-12 words copied VERBATIM from the transcript, the first words of the segment
+5. end_quote: 6-12 words copied VERBATIM from the transcript, the last words of the segment
+6. A 2-3 sentence summary
+
+The quotes are used to locate exact timestamps, so copy them exactly - no paraphrasing.
 
 Transcript:
 {transcript_text}
@@ -628,21 +701,56 @@ Transcript:
 Return ONLY a JSON object:
 {{
   "segments": [
-    {{"topic": "Short topic name", "start_time": 0, "end_time": 126, "summary": "..."}}
+    {{"topic": "Short topic name", "start_time": 0, "end_time": 126, "start_quote": "...", "end_quote": "...", "summary": "..."}}
   ]
 }}"""
 
-    try:
-        response = tracked_chat(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.2,
-        )
-        result = json.loads(response.choices[0].message.content)
-        raw_segs = result.get('segments', [])
-    except Exception as e:
-        return jsonify({'error': f'AI detection failed: {str(e)}'}), 500
+    # Segment detection runs on Claude when available, falling back to gpt-4o.
+    # The Messages API has no response_format=json_object; prefilling the
+    # assistant turn with '{' is the equivalent - Claude continues the object
+    # and we prepend the brace back before parsing.
+    raw_segs = None
+    _detect_err = None
+    if anthropic_client is not None:
+        try:
+            _resp = tracked_claude(
+                _session_id=session_id,
+                model=SEGMENT_MODEL,
+                max_tokens=16000,
+                temperature=0.2,
+                messages=[
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": "{"},
+                ],
+            )
+            if getattr(_resp, 'stop_reason', None) == 'max_tokens':
+                app.logger.error(
+                    'detect_segments: response TRUNCATED at max_tokens - '
+                    'segments will be incomplete. Raise max_tokens.')
+            _txt = '{' + _resp.content[0].text
+            raw_segs = json.loads(_txt).get('segments', [])
+            app.logger.info(
+                f'detect_segments: {SEGMENT_MODEL} returned {len(raw_segs)} segments '
+                f'(in={_resp.usage.input_tokens} out={_resp.usage.output_tokens})')
+        except Exception as e:
+            _detect_err = e
+            app.logger.warning(f'Claude detection failed, falling back to gpt-4o: {e}')
+            raw_segs = None
+    if raw_segs is None:
+        try:
+            response = tracked_chat(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.2,
+            )
+            result = json.loads(response.choices[0].message.content)
+            raw_segs = result.get('segments', [])
+        except Exception as e:
+            _msg = f'AI detection failed: {e}'
+            if _detect_err:
+                _msg += f' (Claude also failed: {_detect_err})'
+            return jsonify({'error': _msg}), 500
 
     # Normalize and generate a suggested title per segment (second, cheap call each).
     segments = []
@@ -653,6 +761,24 @@ Return ONLY a JSON object:
         except (TypeError, ValueError):
             start_time = 0.0
             end_time = 60.0
+        # Prefer real transcript timestamps found via the model's verbatim
+        # quotes over its own arithmetic, which drifts badly on long shows.
+        _snap_s = _snap_to_quote(transcript_segments, seg.get('start_quote'), 'start')
+        _snap_e = _snap_to_quote(transcript_segments, seg.get('end_quote'), 'end')
+        _how = []
+        if _snap_s is not None:
+            _how.append(f'start {start_time:.0f}->{_snap_s:.0f}')
+            start_time = _snap_s
+        else:
+            _how.append(f'start {start_time:.0f} (model)')
+        if _snap_e is not None and _snap_e > start_time:
+            _how.append(f'end {end_time:.0f}->{_snap_e:.0f}')
+            end_time = _snap_e
+        else:
+            _how.append(f'end {end_time:.0f} (model)')
+        app.logger.info(f'segment {i}: ' + ', '.join(_how))
+        if end_time <= start_time:
+            end_time = start_time + 60.0
         topic = seg.get('topic', f'Segment {i+1}')
         summary = seg.get('summary', '')
 
@@ -682,6 +808,12 @@ Return ONLY JSON: {{"title": "..."}}"""
             'end_time': end_time,
             'summary': summary,
             'title': title,
+            # Kept for auditing: shows what the model anchored to and whether
+            # the timestamp came from a quote match or its own estimate.
+            'start_quote': seg.get('start_quote') or '',
+            'end_quote': seg.get('end_quote') or '',
+            'snap_start': _snap_s is not None,
+            'snap_end': _snap_e is not None,
         })
 
     session['segments'] = segments
@@ -2969,6 +3101,27 @@ def tracked_chat(_user_id=None, _session_id=None, _segment_index=None, **kwargs)
     return resp
 
 
+def tracked_claude(_user_id=None, _session_id=None, _segment_index=None, **kwargs):
+    """anthropic_client.messages.create with automatic cost recording.
+
+    Mirrors tracked_chat. Cost tracking never breaks the call.
+    """
+    resp = anthropic_client.messages.create(**kwargs)
+    try:
+        if _user_id is None:
+            try:
+                _u = autoclip_auth.get_current_user()
+                _user_id = _u['id'] if _u else None
+            except Exception:
+                _user_id = None
+        if _user_id:
+            costs.record_claude_text(
+                autoclip_db.get_db(), _user_id, resp,
+                model=kwargs.get('model', SEGMENT_MODEL),
+                session_id=_session_id, segment_index=_segment_index)
+    except Exception:
+        app.logger.exception('claude cost record failed')
+    return resp
 # __SEGMENT_TRANSCRIPT_V1__
 def segment_transcript_text(session, segment, max_chars=3000):
     """

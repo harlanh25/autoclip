@@ -13,6 +13,10 @@ WHISPER_PER_MIN      = 0.006
 GPT4O_IN_PER_TOKEN   = 2.50 / 1_000_000
 GPT4O_OUT_PER_TOKEN  = 10.00 / 1_000_000
 IMAGE_PER_GEN        = 0.165      # gpt-image-2 1536x1024 high
+# Claude Sonnet 5 - introductory $2/$10 per MTok through 2026-08-31,
+# then $3/$15 from 2026-09-01. Update these two lines on Sept 1.
+SONNET5_IN_PER_TOKEN  = 2.00 / 1_000_000
+SONNET5_OUT_PER_TOKEN = 10.00 / 1_000_000
 L4_GPU_PER_HOUR      = 0.71
 GCS_STORE_PER_GB_MO  = 0.020
 GCS_EGRESS_PER_GB    = 0.12
@@ -56,6 +60,23 @@ def record_gpt_text(db, user_id, response, model='gpt-4o',
            detail=detail or f'{model} in={tin} out={tout}')
 
 
+def record_claude_text(db, user_id, response, model='claude-sonnet-5',
+                       session_id=None, segment_index=None, detail=None):
+    """Pull real token counts off an Anthropic Messages response.
+
+    Recorded under kind='gpt_text' so the admin dashboard aggregates AI text
+    spend across providers without a schema or dashboard change. The model
+    name in `detail` distinguishes them.
+    """
+    try:
+        u = response.usage
+        tin, tout = u.input_tokens, u.output_tokens
+    except Exception:
+        return
+    cost = tin * SONNET5_IN_PER_TOKEN + tout * SONNET5_OUT_PER_TOKEN
+    record(db, user_id, 'gpt_text', cost, quantity=tin + tout, unit='tok',
+           session_id=session_id, segment_index=segment_index,
+           detail=detail or f'{model} in={tin} out={tout}')
 def record_image(db, user_id, model, session_id=None, segment_index=None):
     record(db, user_id, 'thumbnail', IMAGE_PER_GEN, quantity=1, unit='image',
            session_id=session_id, segment_index=segment_index, detail=model)
