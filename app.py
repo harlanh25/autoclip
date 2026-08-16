@@ -6,6 +6,7 @@ Upload a live show, clip segments, add ads, generate titles/descriptions, upload
 """
 
 import os
+import time
 import json
 import uuid
 import subprocess
@@ -908,6 +909,21 @@ def _sweep_uploads_dir(max_age_hours=1, min_free_gb=2.0):
     except Exception as _e:
         app.logger.warning(f'uploads sweep failed: {_e}')
 
+@app.errorhandler(Exception)
+def _log_unhandled(e):
+    """Force unhandled exceptions into the log with a full traceback.
+
+    Tracebacks were not reaching journald, so 500s were opaque. Re-raises
+    HTTP exceptions untouched so 404/403 behave normally.
+    """
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return e
+    import traceback as _tb
+    app.logger.error(
+        'UNHANDLED %s %s\n%s',
+        request.method, request.path, _tb.format_exc())
+    return jsonify({'error': f'{type(e).__name__}: {e}'}), 500
 @app.route('/api/clip/<session_id>', methods=['POST'])
 def create_clip(session_id):
     """Cut a clip from the source. Writes to GCS, deletes local temp."""
@@ -951,6 +967,10 @@ def create_clip(session_id):
 
         segment['clip_gcs_key'] = gcs_key
         segment['clip_file'] = f'{session_id}_clip_{segment_index}.mp4'  # kept for backward-compat URL routing
+        # Version stamp: clip_gcs_key is deterministic, so a re-cut writes the
+        # same key and the browser serves its cached video. This changes the
+        # preview URL only when the clip actually changes.
+        segment['clip_version'] = int(time.time())
         # Retire local clip_path — no longer stored locally
         segment['clip_path'] = None
     finally:
@@ -2517,7 +2537,12 @@ def serve_clip(filename):
 
     try:
         url = gcs_storage.signed_url(gcs_key, expires_seconds=3600)
-        return redirect(url)
+        # A re-cut writes the same deterministic gcs_key, so without this the
+        # browser reuses its cached redirect and shows the old video.
+        _r = redirect(url)
+        _r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        _r.headers['Pragma'] = 'no-cache'
+        return _r
     except Exception as e:
         return f'Failed to sign URL: {e}', 500
 
@@ -3476,6 +3501,7 @@ def execute_all(session_id):
                 segment['clip_gcs_key'] = gcs_key
                 segment['clip_file'] = f'{session_id}_clip_{i}.mp4'
                 segment['clip_path'] = None
+                segment['clip_version'] = int(time.time())
                 summary['cut'] += 1
 
                 try:

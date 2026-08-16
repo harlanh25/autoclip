@@ -213,7 +213,7 @@
             <div class="field-label"><span class="label">Current Clip</span></div>
             <div class="clip-preview">
               {% if seg.clip_file %}
-              <video controls src="/clip-file/{{ seg.clip_file }}" preload="metadata"></video>
+              <video controls src="/clip-file/{{ seg.clip_file }}?v={{ seg.clip_version or 0 }}" preload="metadata"></video>
               {% else %}
               <div class="clip-empty">Clip not cut yet — click "Re-cut Clip" above</div>
               {% endif %}
