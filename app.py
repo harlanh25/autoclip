@@ -74,6 +74,18 @@ TRIAL_GATE_EXEMPT_PREFIX = ('/static/', '/auth/', '/api/admin/', '/api/stripe/',
 
 
 @app.context_processor
+def _inject_current_user():
+    """Make `current_user` available in every template. Never raises.
+
+    _nav.html keys the signed-in state off current_user, but it was only
+    passed by routes that happened to remember, so pages like /clips showed
+    a Sign in link to authenticated users.
+    """
+    try:
+        return {'current_user': autoclip_auth.get_current_user()}
+    except Exception:
+        return {'current_user': None}
+@app.context_processor
 def _inject_trial_context():
     """Make `trial` available in every template. Never raises."""
     try:
