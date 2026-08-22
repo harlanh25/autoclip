@@ -1913,18 +1913,26 @@ def publish_async_create(session_id):
     # No ads selected -> nothing to compose. Skip the GPU worker entirely and
     # hand the finisher the clip's own GCS key. The worker would raise
     # RuntimeError('nothing to compose (no ads set)') on this input.
+    # Editing a segment's times clears clip_gcs_key so execute_all re-cuts from
+    # the new boundaries. Publishing before that re-cut used to enqueue a task
+    # with clip_gcs_key=None and crash the worker on None.startswith('gs://').
+    # Checked here so it covers both the GPU path and the passthrough path.
+    _clip_key = segment.get('clip_gcs_key')
+    if not _clip_key:
+        _msg = ('This segment has no clip yet. Its start or end time changed, '
+                'so it needs to be re-cut before publishing.')
+        db.execute(
+            "UPDATE publish_jobs SET status='failed', error=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
+            (_msg, job_id))
+        db.commit()
+        app.logger.warning(
+            f'job {job_id}: publish blocked, segment {segment_index} has no clip_gcs_key')
+        return jsonify({'error': _msg, 'job_id': job_id}), 400
     _has_ads = bool(
         segment.get('intro_ad_id') or segment.get('mid_ad_id')
         or segment.get('outro_ad_id') or (segment.get('extra_mid_ad_ids') or [])
     )
     if not _has_ads:
-        _clip_key = segment.get('clip_gcs_key')
-        if not _clip_key:
-            db.execute(
-                "UPDATE publish_jobs SET status='failed', error=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
-                ('No clip_gcs_key on segment', job_id))
-            db.commit()
-            return jsonify({'error': 'Segment has no clip file', 'job_id': job_id}), 400
         db.execute(
             "UPDATE publish_jobs SET status='running', stage='compose_done', "
             "progress_pct=90, composed_gcs_key=?, composed_gcs_bucket=? WHERE id=?",
