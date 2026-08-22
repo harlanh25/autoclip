@@ -148,6 +148,8 @@ def transistor_upload_file(upload_url: str, file_path: str):
 
 def transistor_create_episode(api_key: str, show_id: str, title: str, audio_url: str, description: str = ""):
     """Create an episode on the given Transistor show."""
+    # Transistor rejects status="published" on create - episodes are always
+    # created as drafts and published via a separate PATCH call.
     resp = requests.post(
         "https://api.transistor.fm/v1/episodes",
         headers={"x-api-key": api_key, "Content-Type": "application/json"},
@@ -157,13 +159,29 @@ def transistor_create_episode(api_key: str, show_id: str, title: str, audio_url:
                 "title": title,
                 "audio_url": audio_url,
                 "description": description,
-                "status": "published",
             }
         },
         timeout=60,
     )
+    if not resp.ok:
+        import logging
+        logging.getLogger(__name__).error(
+            f"Transistor rejected episode create: {resp.status_code} {resp.text}")
     resp.raise_for_status()
-    return resp.json()["data"]
+    episode = resp.json()["data"]
+    episode_id = episode["id"]
+    pub_resp = requests.patch(
+        f"https://api.transistor.fm/v1/episodes/{episode_id}/publish",
+        headers={"x-api-key": api_key, "Content-Type": "application/json"},
+        json={"episode": {"status": "published"}},
+        timeout=60,
+    )
+    if not pub_resp.ok:
+        import logging
+        logging.getLogger(__name__).error(
+            f"Transistor rejected episode publish: {pub_resp.status_code} {pub_resp.text}")
+    pub_resp.raise_for_status()
+    return pub_resp.json()["data"]
 
 
 # ----------------------------------------------------------------------
@@ -258,19 +276,21 @@ def process_config(conn, config: dict) -> int:
                         f"{video_id}.mp3",
                     )
                     transistor_upload_file(upload_attrs["upload_url"], mp3_path)
-                    transistor_create_episode(
+                    _ep = transistor_create_episode(
                         api_key=config["destination_api_key"],
                         show_id=config["destination_show_id"],
                         title=title,
                         audio_url=upload_attrs["audio_url"],
                         description=f"Source: https://www.youtube.com/watch?v={video_id}",
                     )
+                    episode_id = _ep.get("id") if _ep else None
 
                 # Record success
                 conn.execute(
-                    "INSERT INTO audio_synced_episodes (config_id, youtube_video_id, youtube_video_title) "
-                    "VALUES (?, ?, ?)",
-                    (config_id, video_id, title),
+                    "INSERT INTO audio_synced_episodes "
+                    "(config_id, youtube_video_id, youtube_video_title, transistor_episode_id) "
+                    "VALUES (?, ?, ?, ?)",
+                    (config_id, video_id, title, episode_id),
                 )
                 # Bump usage
                 conn.execute(
