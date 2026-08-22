@@ -343,6 +343,10 @@
               </div>
               <input type="file" accept="image/*" style="display: none;" id="ref-picker-{{ idx }}">
             </div>
+            <label style="display:flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-size:0.85rem;color:var(--muted);cursor:pointer;">
+              <input type="checkbox" id="thumb-logo-{{ idx }}" style="width:auto;margin:0;">
+              Include channel logo
+            </label>
             <div class="field-label" style="margin-top: 0.75rem;">
               <span class="label">Guidance (steer the AI)</span>
             </div>
@@ -699,18 +703,20 @@
     const guidance = document.getElementById('thumb-guidance-'+idx).value.trim();
     const refs = refImages[idx] || {};
     const refCount = Object.keys(refs).length;
+    const includeLogo = document.getElementById('thumb-logo-'+idx).checked;
 
-    setStatus('thumb-status-'+idx, refCount > 0
-      ? `Generating thumbnail with ${refCount} reference image${refCount > 1 ? 's' : ''} (30-90s)...`
+    setStatus('thumb-status-'+idx, (refCount > 0 || includeLogo)
+      ? `Generating thumbnail with reference images (30-90s)...`
       : 'Generating thumbnail (30-60s)...');
 
     let r;
-    if (refCount > 0) {
-      // Use multipart endpoint with reference images
+    if (refCount > 0 || includeLogo) {
+      // Use multipart endpoint - reference images and/or channel logo
       const fd = new FormData();
       fd.append('session_id', '{{ session.id }}');
       fd.append('segment_index', idx);
       fd.append('guidance', guidance);
+      fd.append('include_channel_logo', includeLogo ? '1' : '0');
       let sentIdx = 0;
       Object.keys(refs).sort().forEach(slot => {
         fd.append('image_'+sentIdx, refs[slot]);

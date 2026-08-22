@@ -4801,7 +4801,17 @@ def generate_thumbnail_with_refs():
         except ValueError:
             return jsonify({'error': 'library_thumb_ids must be comma-separated ints'}), 400
 
-    if not ref_files and not library_ids:
+    include_logo = (request.form.get('include_channel_logo') or '').strip().lower() in ('1', 'true', 'yes')
+    logo_gcs_key = None
+    if include_logo:
+        _lrow = _rdb.execute(
+            'SELECT logo_gcs_key FROM channels WHERE youtube_channel_id=?', (yt_channel_id,)
+        ).fetchone()
+        logo_gcs_key = _lrow['logo_gcs_key'] if _lrow else None
+        if not logo_gcs_key:
+            include_logo = False  # checkbox on but no logo uploaded - fall through, don't error
+
+    if not ref_files and not library_ids and not logo_gcs_key:
         return jsonify({'error': 'at least one reference image or library pick required (use /api/generate_thumbnail for text-only)'}), 400
 
     MAX_REFS = 16
@@ -4846,6 +4856,13 @@ def generate_thumbnail_with_refs():
             _lib_path = os.path.join(tmp_dir, f'lib_{j}.{_ext}')
             gcs_storage.download_from_gcs(_key, _lib_path)
             tmp_paths.append(_lib_path)
+        if logo_gcs_key:
+            _logo_ext = logo_gcs_key.rsplit('.', 1)[-1].lower() if '.' in logo_gcs_key else 'png'
+            if _logo_ext not in ('png', 'jpg', 'jpeg', 'webp'):
+                _logo_ext = 'png'
+            _logo_path = os.path.join(tmp_dir, f'channel_logo.{_logo_ext}')
+            gcs_storage.download_from_gcs(logo_gcs_key, _logo_path)
+            tmp_paths.append(_logo_path)
 
         # Build the prompt
         title = segment.get('title', '')
@@ -4861,6 +4878,9 @@ def generate_thumbnail_with_refs():
             "reference images. Do NOT invent, draw, or add any additional logos, "
             "wordmarks, network bugs, team marks, or brand insignia that are not "
             "present in the references."
+            + (" One of the reference images is the channel's official logo - place "
+               "it tastefully in a corner of the thumbnail (e.g. bottom right), small "
+               "enough not to obscure the main subject." if logo_gcs_key else "")
         )
         _rstyle = _channel_thumbnail_style(session.get('channel_youtube_id'))
         if _rstyle:
