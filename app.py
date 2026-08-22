@@ -1594,8 +1594,41 @@ def _finish_publish_job(job_id):
                 db.commit()
             except Exception:
                 app.logger.exception('Also failed to update job status')
+        finally:
+            # The in-try cleanup above is skipped whenever the upload raises,
+            # which leaked a full composed video (1.5 GB) per failed publish.
+            # _tmp may be unbound if we failed before mkdtemp, hence locals().
+            _t = locals().get('_tmp')
+            if _t:
+                try:
+                    import shutil as _sh2
+                    _sh2.rmtree(_t, ignore_errors=True)
+                except Exception:
+                    pass
 
 
+def _sweep_stale_temp_dirs(max_age_hours=2):
+    """Delete orphaned autoclip temp dirs in /tmp.
+
+    The finally block above covers exceptions, but not a hard kill (OOM,
+    systemctl restart mid-publish, VM reboot). Those leak a full composed
+    video each. Runs once at startup. Silent - never raises.
+    """
+    import glob as _glob
+    import shutil as _sh3
+    cutoff = time.time() - (max_age_hours * 3600)
+    freed = 0
+    for pat in ('/tmp/autoclip_finisher_*', '/tmp/autoclip_execall_*',
+                '/tmp/autoclip_thumb_refs_*'):
+        for d in _glob.glob(pat):
+            try:
+                if os.path.getmtime(d) < cutoff:
+                    _sh3.rmtree(d, ignore_errors=True)
+                    freed += 1
+            except Exception:
+                pass
+    if freed:
+        app.logger.info(f'startup sweep: removed {freed} stale temp dir(s)')
 def _yt_finisher_loop():
     """Poll for compose_done jobs, run finisher on each."""
     app.logger.info('YT finisher thread started')
@@ -1623,6 +1656,10 @@ def _start_yt_finisher_once():
         if _YT_FINISHER_STARTED:
             return
         _YT_FINISHER_STARTED = True
+        try:
+            _sweep_stale_temp_dirs()
+        except Exception:
+            app.logger.exception('startup temp sweep failed')
         t = _threading_v42y.Thread(target=_yt_finisher_loop, name='yt-finisher', daemon=True)
         t.start()
 
