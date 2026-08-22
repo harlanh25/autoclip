@@ -146,10 +146,16 @@ def transistor_upload_file(upload_url: str, file_path: str):
     resp.raise_for_status()
 
 
-def transistor_create_episode(api_key: str, show_id: str, title: str, audio_url: str, description: str = ""):
-    """Create an episode on the given Transistor show."""
-    # Transistor rejects status="published" on create - episodes are always
-    # created as drafts and published via a separate PATCH call.
+def transistor_create_episode(api_key: str, show_id: str, title: str, audio_url: str,
+                               description: str = "", publish: bool = True):
+    """Create an episode on the given Transistor show.
+
+    Transistor rejects status="published" on create - episodes are always
+    created as drafts and published via a separate PATCH call. When
+    publish=False the episode is left as a draft (used when the destination
+    platform has its own ad system that requires the podcaster to approve ads
+    before the episode can go live).
+    """
     resp = requests.post(
         "https://api.transistor.fm/v1/episodes",
         headers={"x-api-key": api_key, "Content-Type": "application/json"},
@@ -170,6 +176,10 @@ def transistor_create_episode(api_key: str, show_id: str, title: str, audio_url:
     resp.raise_for_status()
     episode = resp.json()["data"]
     episode_id = episode["id"]
+
+    if not publish:
+        return episode  # left as draft
+
     pub_resp = requests.patch(
         f"https://api.transistor.fm/v1/episodes/{episode_id}/publish",
         headers={"x-api-key": api_key, "Content-Type": "application/json"},
@@ -182,6 +192,62 @@ def transistor_create_episode(api_key: str, show_id: str, title: str, audio_url:
             f"Transistor rejected episode publish: {pub_resp.status_code} {pub_resp.text}")
     pub_resp.raise_for_status()
     return pub_resp.json()["data"]
+
+
+def buzzsprout_create_episode(api_key: str, podcast_id: str, title: str, audio_path: str,
+                               description: str = "", publish: bool = True):
+    """Upload audio and create an episode on Buzzsprout in a single call.
+
+    Buzzsprout takes the audio file directly (no separate presigned-upload
+    step like Transistor) and a private flag controls draft vs. live -
+    private=True keeps it unpublished until the podcaster approves ads in
+    their own Buzzsprout dashboard.
+    """
+    with open(audio_path, "rb") as f:
+        resp = requests.post(
+            f"https://www.buzzsprout.com/api/{podcast_id}/episodes.json",
+            headers={"Authorization": f"Token token={api_key}"},
+            data={
+                "title": title,
+                "description": description,
+                "private": "false" if publish else "true",
+            },
+            files={"audio_file": (os.path.basename(audio_path), f, "audio/mpeg")},
+            timeout=600,
+        )
+    if not resp.ok:
+        import logging
+        logging.getLogger(__name__).error(
+            f"Buzzsprout rejected episode create: {resp.status_code} {resp.text}")
+    resp.raise_for_status()
+    return resp.json()
+
+
+def publish_episode(destination_type: str, api_key: str, show_id: str, title: str,
+                     audio_path: str, description: str, publish: bool):
+    """Dispatch episode creation to the right platform. Returns the episode id or None.
+
+    Every destination handler must accept and honor `publish` - when False,
+    the episode is created but left unpublished, because the destination
+    platform requires the podcaster to manually approve platform ads before
+    an episode can go live.
+    """
+    if destination_type == "transistor":
+        upload_attrs = transistor_authorize_upload(api_key, f"{os.path.basename(audio_path)}")
+        transistor_upload_file(upload_attrs["upload_url"], audio_path)
+        ep = transistor_create_episode(
+            api_key=api_key, show_id=show_id, title=title,
+            audio_url=upload_attrs["audio_url"], description=description, publish=publish,
+        )
+        return ep.get("id") if ep else None
+    elif destination_type == "buzzsprout":
+        ep = buzzsprout_create_episode(
+            api_key=api_key, podcast_id=show_id, title=title,
+            audio_path=audio_path, description=description, publish=publish,
+        )
+        return ep.get("id") if ep else None
+    else:
+        raise ValueError(f"Unsupported destination_type: {destination_type!r}")
 
 
 # ----------------------------------------------------------------------
@@ -271,19 +337,23 @@ def process_config(conn, config: dict) -> int:
                             raise RuntimeError("yt-dlp produced no output file")
                         mp3_path = str(candidates[0])
 
-                    upload_attrs = transistor_authorize_upload(
-                        config["destination_api_key"],
-                        f"{video_id}.mp3",
-                    )
-                    transistor_upload_file(upload_attrs["upload_url"], mp3_path)
-                    _ep = transistor_create_episode(
+                    # has_platform_ads: some destinations (Buzzsprout,
+                    # Simplecast) require the podcaster to manually approve
+                    # ads in their own dashboard before an episode can go
+                    # live - the API cannot do this. When set, episodes are
+                    # created but left as drafts.
+                    should_publish = not config.get("has_platform_ads")
+                    episode_id = publish_episode(
+                        destination_type=config.get("destination_type", "transistor"),
                         api_key=config["destination_api_key"],
                         show_id=config["destination_show_id"],
                         title=title,
-                        audio_url=upload_attrs["audio_url"],
+                        audio_path=mp3_path,
                         description=f"Source: https://www.youtube.com/watch?v={video_id}",
+                        publish=should_publish,
                     )
-                    episode_id = _ep.get("id") if _ep else None
+                    if not should_publish:
+                        log.info(f"[cfg={config_id}]   created as DRAFT - ads need approval in destination dashboard")
 
                 # Record success
                 conn.execute(
