@@ -13,8 +13,9 @@ WHISPER_PER_MIN      = 0.006
 GPT4O_IN_PER_TOKEN   = 2.50 / 1_000_000
 GPT4O_OUT_PER_TOKEN  = 10.00 / 1_000_000
 IMAGE_PER_GEN        = 0.165      # gpt-image-2 1536x1024 high
-# Claude Sonnet 5 - introductory $2/$10 per MTok through 2026-08-31,
-# then $3/$15 from 2026-09-01. Update these two lines on Sept 1.
+# Claude Sonnet 5 - $2/$10 per MTok. Anthropic made the introductory rate
+# permanent on 2026-08-10 and cancelled the $3/$15 increase that had been
+# scheduled for 2026-09-01. No change needed.
 SONNET5_IN_PER_TOKEN  = 2.00 / 1_000_000
 SONNET5_OUT_PER_TOKEN = 10.00 / 1_000_000
 L4_GPU_PER_HOUR      = 0.71

@@ -81,6 +81,12 @@
   /* Clip preview */
   .clip-preview { width: 100%; aspect-ratio: 16/9; background: var(--bg3); border-radius: 8px; margin-top: 0.5rem; }
   .clip-preview video { width: 100%; height: 100%; border-radius: 8px; background: #000; }
+  .clip-expired { width: 100%; height: 100%; border-radius: 8px; background: var(--bg3);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.35rem; text-align: center; padding: 1rem; box-sizing: border-box; }
+  .clip-expired strong { color: var(--text); font-size: 0.95rem; }
+  .clip-expired div { color: var(--muted); font-size: 0.8rem; line-height: 1.4; }
+  .clip-expired a { color: var(--accent-light, #3b82f6); font-size: 0.8rem; text-decoration: underline; }
   .clip-empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.85rem; height: 100%; }
 
   /* Thumbnail */
@@ -213,7 +219,17 @@
             <div class="field-label"><span class="label">Current Clip</span></div>
             <div class="clip-preview">
               {% if seg.clip_file %}
+              {% if seg | clip_expired %}
+              <div class="clip-expired">
+                <strong>Clip expired</strong>
+                <div>Video files are removed after 30 days. Re-cut this segment to restore it.</div>
+                {% if seg.youtube_video_id %}
+                <a href="https://studio.youtube.com/video/{{ seg.youtube_video_id }}/edit" target="_blank">Open in YouTube Studio &rarr;</a>
+                {% endif %}
+              </div>
+              {% else %}
               <video controls src="/clip-file/{{ seg.clip_file }}?v={{ seg.clip_version or 0 }}" preload="metadata"></video>
+              {% endif %}
               {% else %}
               <div class="clip-empty">Clip not cut yet — click "Re-cut Clip" above</div>
               {% endif %}

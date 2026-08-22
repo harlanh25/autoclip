@@ -73,6 +73,31 @@ TRIAL_GATE_EXEMPT_EXACT = {'/pricing', '/account', '/logout', '/login', '/favico
 TRIAL_GATE_EXEMPT_PREFIX = ('/static/', '/auth/', '/api/admin/', '/api/stripe/', '/api/checkout/', '/api/billing_portal')
 
 
+# GCS lifecycle deletes clips/ and uploads/ at 30 days, composed/ at 7.
+# Nothing in the app knew that, so an expired session still rendered a video
+# tag pointing at a deleted object - a broken player with no explanation.
+CLIP_RETENTION_DAYS = 30
+def clip_expiry(segment):
+    """Return (is_expired, days_left) for a segment's clip.
+
+    Age comes from clip_version, the unix timestamp written at both cut sites,
+    so this costs nothing per request. days_left is None when unknown.
+    """
+    cv = (segment or {}).get('clip_version')
+    if not cv:
+        return (False, None)
+    try:
+        age_days = (time.time() - float(cv)) / 86400.0
+    except (TypeError, ValueError):
+        return (False, None)
+    left = CLIP_RETENTION_DAYS - age_days
+    return (left <= 0, int(left) if left > 0 else 0)
+@app.template_filter('clip_expired')
+def _tf_clip_expired(segment):
+    return clip_expiry(segment)[0]
+@app.template_filter('clip_days_left')
+def _tf_clip_days_left(segment):
+    return clip_expiry(segment)[1]
 @app.context_processor
 def _inject_current_user():
     """Make `current_user` available in every template. Never raises.
