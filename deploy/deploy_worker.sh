@@ -3,9 +3,11 @@
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-youtube-podcast-sync-502121}"
-REGION="${REGION:-us-east1}"
+REGION="${REGION:-us-east4}"
 SERVICE="${SERVICE:-autoclip-worker}"
-IMAGE="${IMAGE:-${REGION}-docker.pkg.dev/${PROJECT_ID}/autoclip-images/autoclip-worker:latest}"
+# Registry lives in us-east1; the service runs in us-east4. Different regions.
+IMAGE_REGION="${IMAGE_REGION:-us-east1}"
+IMAGE="${IMAGE:-${IMAGE_REGION}-docker.pkg.dev/${PROJECT_ID}/autoclip-images/autoclip-worker:latest}"
 WORKER_SA="${WORKER_SA:-autoclip-worker@${PROJECT_ID}.iam.gserviceaccount.com}"
 
 if [ -z "${WORKER_SHARED_SECRET:-}" ]; then
@@ -27,7 +29,7 @@ gcloud run deploy "${SERVICE}" \
   --timeout 3600 \
   --concurrency 1 \
   --min-instances 0 \
-  --max-instances 5 \
+  --max-instances 3 \
   --no-allow-unauthenticated \
   --set-env-vars "VM_CALLBACK_URL=https://autoclip.cloud,WORKER_SHARED_SECRET=${WORKER_SHARED_SECRET},OUTPUT_GCS_BUCKET=autoclip-uploads"
 
