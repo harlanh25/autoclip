@@ -49,20 +49,21 @@ def _wrap_audio_as_video(audio_path, out_path):
     ], timeout=300)
 
 
-def _find_silence_split(clip_path, window_secs=180, fallback=60.0):
+def _find_silence_split(clip_path, window_secs=180, fallback=60.0, min_pos=0.0):
     try:
         r = subprocess.run(
-            ['ffmpeg', '-i', clip_path, '-t', str(window_secs),
+            ['ffmpeg', '-i', clip_path, '-vn', '-t', str(window_secs),
              '-af', 'silencedetect=noise=-30dB:d=0.5', '-f', 'null', '-'],
             capture_output=True, text=True, timeout=120,
         )
         ends = re.findall(r'silence_end: (\d+\.?\d*)', r.stderr or '')
-        candidates = [float(t) for t in ends if float(t) < window_secs - 10]
+        candidates = [float(t) for t in ends
+                      if min_pos <= float(t) < window_secs - 10]
         if candidates:
             return candidates[-1]
     except Exception:
         pass
-    return fallback
+    return max(fallback, min_pos)
 
 
 def compose_clip_with_ads(
@@ -116,6 +117,9 @@ def compose_clip_with_ads(
 
     MIN_EDGE = 3.0      # keep this much real content at each end
     MIN_GAP = 5.0       # minimum spacing between two mid ads
+    MIN_AUTO_POS = 120.0   # never AUTO-place a mid ad before this point
+    MIN_AUTO_TAIL = 30.0   # ...and leave at least this much clip after it
+    AUTO_WINDOW = 420.0    # how far in to search for a silence
 
     if mid_specs:
         _dur_r = subprocess.run(
@@ -133,16 +137,32 @@ def compose_clip_with_ads(
             log.warning('Clip too short (%ss) for mid ads; skipping all mids', _clip_dur)
             mid_specs = []
         else:
+            if _clip_dur >= MIN_AUTO_POS + MIN_AUTO_TAIL:
+                auto_lo = MIN_AUTO_POS
+            else:
+                auto_lo = None
+                _n = sum(1 for sp in mid_specs if sp[0] is None)
+                if _n:
+                    log.warning('Clip %ss too short to auto-place a mid '
+                                'after %ss; dropping %d auto mid(s)',
+                                round(_clip_dur, 1), MIN_AUTO_POS, _n)
+                    mid_specs = [sp for sp in mid_specs if sp[0] is not None]
+
             n_mid = len(mid_specs)
             for i, spec in enumerate(mid_specs):
                 if spec[0] is None:
                     if n_mid == 1:
                         # single mid: keep the silence-detection behaviour
                         spec[0] = _find_silence_split(
-                            clip_path, window_secs=min(180, _clip_dur - 3))
+                            clip_path,
+                            window_secs=min(AUTO_WINDOW, _clip_dur - 3),
+                            fallback=auto_lo, min_pos=auto_lo)
+                        log.info('Auto mid at %ss (floor %ss)',
+                                 round(spec[0], 2), MIN_AUTO_POS)
                     else:
                         # multiple: distribute evenly
-                        spec[0] = _clip_dur * (i + 1) / (n_mid + 1)
+                        _hi = _clip_dur - MIN_EDGE
+                        spec[0] = auto_lo + (_hi - auto_lo) * (i + 1) / (n_mid + 1)
                 spec[0] = float(spec[0])
 
             # order by position, then clamp and enforce spacing
