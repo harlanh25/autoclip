@@ -39,6 +39,29 @@ def _probe_has_video(path):
         return False
 
 
+def _probe_video_params(path):
+    """(width, height, fps) of a file's first video stream.
+
+    Ads and clips are whatever the customer uploaded, so nothing may
+    assume 1080p. Falls back to the TARGET_* constants on failure.
+    """
+    try:
+        r = subprocess.run(
+            ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+             '-show_entries', 'stream=width,height,r_frame_rate',
+             '-of', 'csv=p=0:s=,', path],
+            capture_output=True, text=True, timeout=15,
+        )
+        w, h, rate = r.stdout.strip().split(',')[:3]
+        num, den = (rate.split('/') + ['1'])[:2]
+        fps = float(num) / float(den or 1)
+        if int(w) > 0 and int(h) > 0 and fps > 0:
+            return int(w), int(h), round(fps, 3)
+    except Exception:
+        pass
+    return TARGET_W, TARGET_H, TARGET_FPS
+
+
 def _wrap_audio_as_video(audio_path, out_path):
     _run_ffmpeg([
         '-f', 'lavfi', '-i', f'color=c=black:s={TARGET_W}x{TARGET_H}:r={TARGET_FPS}',
@@ -226,8 +249,28 @@ def compose_clip_with_ads(
     for p in ordered:
         input_args += ['-i', p]
     n = len(ordered)
-    stream_pairs = ''.join(f'[{i}:v:0][{i}:a:0]' for i in range(n))
-    filter_str = f'{stream_pairs}concat=n={n}:v=1:a=1[outv][outa]'
+
+    # concat requires identical width/height/SAR/pix_fmt on every input, and
+    # ads are user-uploaded at arbitrary resolutions. Normalise each input to
+    # the clip's own geometry: scale to fit, pad to fill (letterbox rather
+    # than stretch), square pixels. Audio too - concat is equally strict
+    # about sample rate and channel layout.
+    _tw, _th, _tfps = _probe_video_params(clip_path)
+    log.info('Normalising %d concat inputs to %dx%d @ %sfps', n, _tw, _th, _tfps)
+    _vf = (
+        'scale={w}:{h}:force_original_aspect_ratio=decrease,'
+        'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,'
+        'setsar=1,fps={f},format=yuv420p'
+    ).format(w=_tw, h=_th, f=_tfps)
+    _af = 'aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo'
+
+    _pre = []
+    for i in range(n):
+        _pre.append(f'[{i}:v:0]{_vf}[v{i}]')
+        _pre.append(f'[{i}:a:0]{_af}[a{i}]')
+    stream_pairs = ''.join(f'[v{i}][a{i}]' for i in range(n))
+    filter_str = ';'.join(_pre) + ';' + \
+        f'{stream_pairs}concat=n={n}:v=1:a=1[outv][outa]'
 
     _run_ffmpeg([
         *input_args,
