@@ -66,7 +66,7 @@
   .field-textarea { min-height: 100px; resize: vertical; }
   .field-input:focus, .field-textarea:focus { outline: none; border-color: var(--accent); }
 
-  .icon-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.7rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .icon-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.7rem; font-weight: 600; cursor: pointer; font-family: inherit; text-decoration: none; display: inline-block; line-height: 1.2; }
   .icon-btn:hover { color: var(--accent-light); border-color: var(--accent); }
 
   /* Timestamp row */
@@ -216,7 +216,14 @@
 
           <!-- Clip preview -->
           <div class="field">
-            <div class="field-label"><span class="label">Current Clip</span></div>
+            <div class="field-label">
+              <span class="label">Current Clip</span>
+              {% if seg.clip_file and not (seg | clip_expired) %}
+              <div class="actions">
+                <a class="icon-btn" href="/clip-file/{{ seg.clip_file }}?download=1" download>&#8681; Download</a>
+              </div>
+              {% endif %}
+            </div>
             <div class="clip-preview">
               {% if seg.clip_file %}
               {% if seg | clip_expired %}

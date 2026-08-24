@@ -2617,7 +2617,15 @@ def serve_clip(filename):
         return 'Clip not found', 404
 
     try:
-        url = gcs_storage.signed_url(gcs_key, expires_seconds=3600)
+        # ?download=1 signs with a Content-Disposition so the browser saves the
+        # file instead of streaming it inline in the <video> element.
+        if request.args.get('download'):
+            _seg_title = (segment.get('title') or f'clip_{seg_idx + 1}')
+            _safe = re.sub(r'[^A-Za-z0-9 ._-]', '', _seg_title).strip()[:80] or f'clip_{seg_idx + 1}'
+            url = gcs_storage.signed_url(
+                gcs_key, expires_seconds=3600, download_name=f'{_safe}.mp4')
+        else:
+            url = gcs_storage.signed_url(gcs_key, expires_seconds=3600)
         # A re-cut writes the same deterministic gcs_key, so without this the
         # browser reuses its cached redirect and shows the old video.
         _r = redirect(url)
