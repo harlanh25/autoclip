@@ -232,8 +232,8 @@
     <div class="checkbox-group" id="ads-group" style="display:none;">
       <input type="checkbox" id="f-ads">
       <div class="cb-body">
-        <label for="f-ads">This show has platform ads enabled (Buzzsprout Ads)</label>
-        <div class="help-text">Buzzsprout does not allow ad approval through the API. With this on, new episodes are created as drafts — you'll approve the ads in your Buzzsprout dashboard, then publish. Leave it off if you don't use Buzzsprout's built-in ad program.</div>
+        <label for="f-ads" id="ads-label">This show has platform ads enabled</label>
+        <div class="help-text" id="ads-help"></div>
       </div>
     </div>
 
@@ -260,6 +260,21 @@ function onPlatformChange() {
   // Ads toggle only applies to hosts with an ad program. Transistor has none.
   const hasAds = (platform === 'buzzsprout' || platform === 'spreaker');
   document.getElementById('ads-group').style.display = hasAds ? 'flex' : 'none';
+  const adsLabel = document.getElementById('ads-label');
+  const adsHelp = document.getElementById('ads-help');
+  if (platform === 'buzzsprout') {
+    adsLabel.textContent = 'This show has platform ads enabled (Buzzsprout Ads)';
+    adsHelp.textContent = "Buzzsprout does not allow ad approval through the API. "
+      + "With this on, new episodes are created as drafts so you can approve the ads "
+      + "in your Buzzsprout dashboard, then publish. Leave it off if you do not use "
+      + "Buzzsprout's built-in ad program.";
+  } else if (platform === 'spreaker') {
+    adsLabel.textContent = 'Hold new episodes as drafts for review';
+    adsHelp.textContent = "Leave this OFF if you use Spreaker's Ad Exchange. Spreaker "
+      + "inserts ads dynamically at playback, so episodes can publish immediately and "
+      + "still earn. Only turn it on if you want to review every episode in Spreaker "
+      + "before it goes live.";
+  }
 }
 
 function openCreateModal() {
