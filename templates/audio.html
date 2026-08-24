@@ -24,35 +24,33 @@
   nav a.active { color: var(--text); }
   .nav-user { display: flex; align-items: center; gap: 0.75rem; color: var(--muted); font-size: 0.85rem; }
   .nav-user img { height: 28px; width: 28px; border-radius: 50%; }
-
   .container { max-width: 1100px; margin: 3rem auto; padding: 0 2rem; }
   .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
   h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
   .subtitle { color: var(--muted); font-size: 0.95rem; margin-top: 0.25rem; }
   .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--accent); color: #fff; text-decoration: none; padding: 0.75rem 1.25rem; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: background 0.2s; border: none; cursor: pointer; font-family: inherit; }
   .btn-primary:hover { background: var(--accent-light); }
-
   .config-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
   .config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
   .config-name { font-size: 1.1rem; font-weight: 700; }
   .config-meta { color: var(--muted); font-size: 0.8rem; line-height: 1.7; }
   .config-meta code { background: var(--bg); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; color: var(--accent-light); }
-  .badges { display: flex; gap: 0.4rem; }
+  .badges { display: flex; gap: 0.4rem; flex-wrap: wrap; }
   .badge { font-size: 0.7rem; font-weight: 700; padding: 0.25rem 0.55rem; border-radius: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
   .badge-active { background: rgba(52,168,83,0.15); color: #4ade80; }
   .badge-inactive { background: rgba(107,107,138,0.15); color: var(--muted); }
   .badge-warn { background: rgba(234,179,8,0.15); color: #fbbf24; }
-  .actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+  .badge-ok { background: rgba(52,168,83,0.15); color: #4ade80; }
+  .badge-fail { background: rgba(239,68,68,0.15); color: #f87171; }
+  .actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
   .btn-sm { padding: 0.5rem 0.9rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-family: inherit; text-decoration: none; }
   .btn-sm:hover { border-color: var(--accent); color: var(--accent-light); }
   .btn-sm.danger { color: #f87171; border-color: rgba(239,68,68,0.3); }
   .btn-sm.danger:hover { background: rgba(239,68,68,0.1); }
-
   .empty-state { background: var(--bg2); border: 2px dashed var(--border); border-radius: 12px; padding: 3rem 2rem; text-align: center; }
   .empty-state .icon { font-size: 2.5rem; margin-bottom: 1rem; }
   .empty-state h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
   .empty-state p { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
-
   /* Modal for create/edit */
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; padding: 2rem; }
   .modal-overlay.open { display: flex; }
@@ -63,6 +61,7 @@
   label { display: block; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 0.5rem; }
   input[type="text"], select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1rem; color: var(--text); font-size: 0.9rem; font-family: inherit; }
   input[type="text"]:focus, select:focus { outline: none; border-color: var(--accent); }
+  select:disabled { opacity: 0.6; cursor: not-allowed; }
   .help-text { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; line-height: 1.5; }
   .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
   .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 0.7rem 1.25rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; font-family: inherit; }
@@ -70,23 +69,35 @@
   .inline-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent-light); padding: 0.55rem 0.9rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; font-family: inherit; margin-left: 0.5rem; }
   .inline-btn:hover { background: rgba(37,99,235,0.1); }
   .fetch-status { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
+  /* Ads toggle */
+  .checkbox-group { display: flex; align-items: flex-start; gap: 0.6rem; margin-bottom: 1.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem 1rem; }
+  .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; margin-top: 0.15rem; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+  .checkbox-group .cb-body { flex: 1; }
+  .checkbox-group label { text-transform: none; letter-spacing: normal; font-size: 0.9rem; color: var(--text); font-weight: 600; margin-bottom: 0.25rem; cursor: pointer; }
+  .checkbox-group .help-text { margin-top: 0; }
+  /* Episode history */
+  .episodes-wrap { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; display: none; }
+  .episodes-wrap.open { display: block; }
+  .ep-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+  .ep-row:last-child { border-bottom: none; }
+  .ep-title { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ep-time { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+  .ep-err { color: #f87171; font-size: 0.72rem; margin-top: 0.15rem; }
+  .ep-empty { color: var(--muted); font-size: 0.82rem; padding: 0.5rem 0; }
 </style>
 </head>
 <body>
 {% include '_trial_widgets.html' %}
-
 {% set active = 'audio' %}
 {% include '_nav.html' with context %}
-
 <div class="container">
   <div class="page-header">
     <div>
       <h1>Audio Sync</h1>
-      <p class="subtitle">Automatically sync YouTube episodes to Transistor.</p>
+      <p class="subtitle">Automatically sync YouTube episodes to your podcast host.</p>
     </div>
     <button class="btn-primary" onclick="openCreateModal()">+ New Sync Config</button>
   </div>
-
   {% if configs %}
     {% for c in configs %}
     <div class="config-card">
@@ -94,73 +105,136 @@
         <div class="config-name">{{ c.name }}</div>
         <div class="badges">
           {% if c.is_active %}<span class="badge badge-active">Active</span>{% else %}<span class="badge badge-inactive">Inactive</span>{% endif %}
+          {% if c.has_platform_ads %}<span class="badge badge-warn">Ads → Drafts</span>{% endif %}
           {% if not c.source_playlist_id %}<span class="badge badge-warn">No Playlist Set</span>{% endif %}
         </div>
       </div>
       <div class="config-meta">
         Source YouTube channel: <code>{{ c.source_youtube_channel_id }}</code><br>
         Playlist ID: {% if c.source_playlist_id %}<code>{{ c.source_playlist_id }}</code>{% else %}<span style="color:#fbbf24;">not set — edit to add</span>{% endif %}<br>
-        Destination: Transistor show <code>{{ c.destination_show_id }}</code>{% if c.destination_show_name %} — {{ c.destination_show_name }}{% endif %}<br>
+        Destination: {{ (c.destination_type or 'transistor')|capitalize }} <code>{{ c.destination_show_id }}</code>{% if c.destination_show_name %} — {{ c.destination_show_name }}{% endif %}<br>
+        {% if c.has_platform_ads %}<span style="color:#fbbf24;">Platform ads enabled — new episodes are created as drafts for dashboard approval.</span><br>{% endif %}
         {% if c.last_synced_at %}Last synced: {{ c.last_synced_at }}{% else %}Never synced.{% endif %}
         {% if current_user.role == 'admin' and c.owner_email %}<br><em>Owner: {{ c.owner_email }}</em>{% endif %}
       </div>
       <div class="actions">
         <button class="btn-sm" onclick='openEditModal({{ c|tojson }})'>Edit</button>
+        <button class="btn-sm" onclick="syncNow({{ c.id }}, this)">Sync Now</button>
+        <button class="btn-sm" onclick="toggleEpisodes({{ c.id }}, this)">History</button>
         <button class="btn-sm" onclick="toggleActive({{ c.id }}, {{ 'false' if c.is_active else 'true' }})">{% if c.is_active %}Deactivate{% else %}Activate{% endif %}</button>
         <button class="btn-sm danger" onclick="deleteConfig({{ c.id }})">Delete</button>
       </div>
+      <div class="episodes-wrap" id="episodes-{{ c.id }}"></div>
     </div>
     {% endfor %}
   {% else %}
   <div class="empty-state">
     <div class="icon">🎙️</div>
     <h3>No audio sync configs yet</h3>
-    <p>Set up your first sync to automatically push YouTube episodes to Transistor.</p>
+    <p>Set up your first sync to automatically push YouTube episodes to your podcast host.</p>
     <button class="btn-primary" onclick="openCreateModal()">+ Create Your First Sync</button>
   </div>
   {% endif %}
 </div>
-
 <!-- Create/Edit Modal -->
 <div class="modal-overlay" id="modal">
   <div class="modal">
     <h2 id="modal-title">New Audio Sync</h2>
-    <p class="modal-subtitle">Watch a YouTube playlist and push new videos to Transistor as podcast episodes.</p>
-
+    <p class="modal-subtitle">Watch a YouTube playlist and push new videos to your podcast host as episodes.</p>
     <div class="form-group">
       <label>Sync Name</label>
       <input type="text" id="f-name" placeholder="e.g. ACC Football Addiction">
       <div class="help-text">A friendly label so you can find this later.</div>
     </div>
-
     <div class="form-group">
       <label>Source YouTube Channel</label>
-      <select id="f-channel">
+      <select id="f-channel" onchange="onChannelChange()">
         <option value="">— Choose a channel —</option>
         {% for ch in channels %}<option value="{{ ch.id }}" data-yt-id="{{ ch.youtube_channel_id }}">{{ ch.title }}</option>{% endfor %}
       </select>
       <div class="help-text">Must be a channel you've already connected on the <a href="/channels" style="color: var(--accent-light);">Channels</a> page.</div>
     </div>
-
     <div class="form-group">
-      <label>YouTube Playlist ID</label>
-      <input type="text" id="f-playlist" placeholder="PLxxxxxxxxxxxxxxxxxx">
-      <div class="help-text">Create a "Podcast Episodes" playlist on your YouTube channel and paste its ID here. Only videos in this playlist will be synced.</div>
-    </div>
-
-    <div class="form-group">
-      <label>Transistor API Key</label>
-      <input type="text" id="f-apikey" placeholder="Your Transistor API key">
-      <button class="inline-btn" type="button" onclick="fetchShows()">Load shows</button>
-      <div class="help-text">Find your key at <a href="https://dashboard.transistor.fm/account" style="color: var(--accent-light);" target="_blank">dashboard.transistor.fm/account</a>. Click "Load shows" to populate the dropdown below.</div>
-      <div class="fetch-status" id="fetch-status"></div>
-    </div>
-
-    <div class="form-group">
-      <label>Transistor Show</label>
-      <select id="f-show">
-        <option value="">— Load shows first —</option>
+      <label>Source Playlist</label>
+      <button class="inline-btn" type="button" style="margin-left:0;" onclick="fetchPlaylists()">Load playlists</button>
+      <select id="f-playlist" style="margin-top:0.6rem;">
+        <option value="">— Choose a channel above, then Load playlists —</option>
       </select>
+      <div class="help-text" id="playlist-fetch-status"></div>
+      <div class="help-text"><strong>Must be set to Public.</strong> The sync worker checks this playlist without logging in, so Private or Unlisted playlists will look empty and nothing will sync. Playlists below are labeled with their current visibility — switch to Public in YouTube Studio first if needed.</div>
+    </div>
+    <div class="form-group">
+      <label>Podcast Platform</label>
+      <select id="f-platform" onchange="onPlatformChange()">
+        <option value="transistor">Transistor</option>
+        <option value="buzzsprout">Buzzsprout</option>
+        <option value="spreaker">Spreaker</option>
+        <option value="simplecast" disabled>Simplecast (coming soon)</option>
+      </select>
+      <div class="help-text" id="platform-locked-note" style="display:none;">Platform can't be changed after creation — delete and recreate the config to switch hosts.</div>
+    </div>
+
+    <!-- Transistor credential fields -->
+    <div id="transistor-fields">
+      <div class="form-group">
+        <label>Transistor API Key</label>
+        <input type="text" id="f-apikey" placeholder="Your Transistor API key">
+        <button class="inline-btn" type="button" onclick="fetchShows()">Load shows</button>
+        <div class="help-text">Find your key at <a href="https://dashboard.transistor.fm/account" style="color: var(--accent-light);" target="_blank">dashboard.transistor.fm/account</a>. Click "Load shows" to populate the dropdown below.</div>
+        <div class="fetch-status" id="fetch-status"></div>
+      </div>
+      <div class="form-group">
+        <label>Transistor Show</label>
+        <select id="f-show">
+          <option value="">— Load shows first —</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Buzzsprout credential fields -->
+    <div id="buzzsprout-fields" style="display:none;">
+      <div class="form-group">
+        <label>Buzzsprout API Token</label>
+        <input type="text" id="f-bz-token" placeholder="Your Buzzsprout API token">
+        <div class="help-text">Different from a Transistor key. Find it in Buzzsprout under Settings → My Profile → API Key.</div>
+      </div>
+      <div class="form-group">
+        <label>Buzzsprout Podcast ID</label>
+        <input type="text" id="f-bz-podcast" placeholder="e.g. 123456">
+        <div class="help-text">Shown on the same Buzzsprout API Key page as your token. This is the numeric podcast ID, not the show name.</div>
+      </div>
+      <div class="form-group">
+        <label>Show Name (optional)</label>
+        <input type="text" id="f-bz-name" placeholder="e.g. SEC Football Addiction">
+        <div class="help-text">A label shown on the config card. Optional.</div>
+      </div>
+    </div>
+
+    <!-- Spreaker credential fields -->
+    <div id="spreaker-fields" style="display:none;">
+      <div class="form-group">
+        <label>Spreaker Access Token</label>
+        <input type="text" id="f-sp-token" placeholder="Your Spreaker OAuth2 access token">
+        <div class="help-text">From your Spreaker account, enable Developer Tools, register an app, and generate an access token. Spreaker tokens are long-lived.</div>
+      </div>
+      <div class="form-group">
+        <label>Spreaker Show ID</label>
+        <input type="text" id="f-sp-show" placeholder="e.g. 1234567">
+        <div class="help-text">The numeric show ID. Open the show in Spreaker and read it from the URL, or call /v2/me/shows.</div>
+      </div>
+      <div class="form-group">
+        <label>Show Name (optional)</label>
+        <input type="text" id="f-sp-name" placeholder="e.g. Double Fries No Slaw">
+        <div class="help-text">A label shown on the config card. Optional.</div>
+      </div>
+    </div>
+    <!-- Platform ads toggle (only relevant for hosts with an ad program) -->
+    <div class="checkbox-group" id="ads-group" style="display:none;">
+      <input type="checkbox" id="f-ads">
+      <div class="cb-body">
+        <label for="f-ads">This show has platform ads enabled (Buzzsprout Ads)</label>
+        <div class="help-text">Buzzsprout does not allow ad approval through the API. With this on, new episodes are created as drafts — you'll approve the ads in your Buzzsprout dashboard, then publish. Leave it off if you don't use Buzzsprout's built-in ad program.</div>
+      </div>
     </div>
 
     <div class="modal-actions">
@@ -169,19 +243,48 @@
     </div>
   </div>
 </div>
-
 <script>
 let editingId = null;
+
+function onChannelChange() {
+  // Playlists are channel-specific; clear any selection from a different channel.
+  document.getElementById('f-playlist').innerHTML = '<option value="">— Choose a channel above, then Load playlists —</option>';
+  document.getElementById('playlist-fetch-status').textContent = '';
+}
+
+function onPlatformChange() {
+  const platform = document.getElementById('f-platform').value;
+  document.getElementById('transistor-fields').style.display = (platform === 'transistor') ? 'block' : 'none';
+  document.getElementById('buzzsprout-fields').style.display = (platform === 'buzzsprout') ? 'block' : 'none';
+  document.getElementById('spreaker-fields').style.display = (platform === 'spreaker') ? 'block' : 'none';
+  // Ads toggle only applies to hosts with an ad program. Transistor has none.
+  const hasAds = (platform === 'buzzsprout' || platform === 'spreaker');
+  document.getElementById('ads-group').style.display = hasAds ? 'flex' : 'none';
+}
 
 function openCreateModal() {
   editingId = null;
   document.getElementById('modal-title').textContent = 'New Audio Sync';
   document.getElementById('f-name').value = '';
   document.getElementById('f-channel').value = '';
-  document.getElementById('f-playlist').value = '';
+  document.getElementById('f-playlist').innerHTML = '<option value="">— Choose a channel above, then Load playlists —</option>';
+  document.getElementById('playlist-fetch-status').textContent = '';
+  // platform
+  const platSel = document.getElementById('f-platform');
+  platSel.value = 'transistor';
+  platSel.disabled = false;
+  document.getElementById('platform-locked-note').style.display = 'none';
+  // transistor
   document.getElementById('f-apikey').value = '';
   document.getElementById('f-show').innerHTML = '<option value="">— Load shows first —</option>';
   document.getElementById('fetch-status').textContent = '';
+  // buzzsprout
+  document.getElementById('f-bz-token').value = '';
+  document.getElementById('f-bz-podcast').value = '';
+  document.getElementById('f-bz-name').value = '';
+  // ads
+  document.getElementById('f-ads').checked = false;
+  onPlatformChange();
   document.getElementById('modal').classList.add('open');
 }
 
@@ -194,10 +297,44 @@ function openEditModal(cfg) {
   for (const opt of chanSel.options) {
     if (opt.dataset.ytId === cfg.source_youtube_channel_id) { chanSel.value = opt.value; break; }
   }
-  document.getElementById('f-playlist').value = cfg.source_playlist_id || '';
-  document.getElementById('f-apikey').value = cfg.destination_api_key || '';
-  document.getElementById('f-show').innerHTML = '<option value="' + cfg.destination_show_id + '">' + (cfg.destination_show_name || cfg.destination_show_id) + '</option>';
+  if (cfg.source_playlist_id) {
+    document.getElementById('f-playlist').innerHTML =
+      '<option value="' + cfg.source_playlist_id + '">Current: ' + cfg.source_playlist_id + ' (Load playlists to change)</option>';
+  } else {
+    document.getElementById('f-playlist').innerHTML = '<option value="">— Load playlists —</option>';
+  }
+  document.getElementById('playlist-fetch-status').textContent = '';
+  // platform — locked after creation
+  const platform = cfg.destination_type || 'transistor';
+  const platSel = document.getElementById('f-platform');
+  platSel.value = platform;
+  platSel.disabled = true;
+  document.getElementById('platform-locked-note').style.display = 'block';
+  // reset both credential blocks first
+  document.getElementById('f-apikey').value = '';
+  document.getElementById('f-show').innerHTML = '<option value="">— Load shows first —</option>';
   document.getElementById('fetch-status').textContent = '';
+  document.getElementById('f-bz-token').value = '';
+  document.getElementById('f-bz-podcast').value = '';
+  document.getElementById('f-bz-name').value = '';
+  document.getElementById('f-sp-token').value = '';
+  document.getElementById('f-sp-show').value = '';
+  document.getElementById('f-sp-name').value = '';
+  if (platform === 'transistor') {
+    document.getElementById('f-apikey').value = cfg.destination_api_key || '';
+    document.getElementById('f-show').innerHTML =
+      '<option value="' + cfg.destination_show_id + '">' + (cfg.destination_show_name || cfg.destination_show_id) + '</option>';
+  } else if (platform === 'buzzsprout') {
+    document.getElementById('f-bz-token').value = cfg.destination_api_key || '';
+    document.getElementById('f-bz-podcast').value = cfg.destination_show_id || '';
+    document.getElementById('f-bz-name').value = cfg.destination_show_name || '';
+  } else if (platform === 'spreaker') {
+    document.getElementById('f-sp-token').value = cfg.destination_api_key || '';
+    document.getElementById('f-sp-show').value = cfg.destination_show_id || '';
+    document.getElementById('f-sp-name').value = cfg.destination_show_name || '';
+  }
+  document.getElementById('f-ads').checked = !!cfg.has_platform_ads;
+  onPlatformChange();
   document.getElementById('modal').classList.add('open');
 }
 
@@ -233,18 +370,56 @@ async function fetchShows() {
   }
 }
 
+async function fetchPlaylists() {
+  const chanId = document.getElementById('f-channel').value;
+  const status = document.getElementById('playlist-fetch-status');
+  if (!chanId) { status.textContent = 'Choose a source channel first.'; return; }
+  status.textContent = 'Loading...';
+  try {
+    const r = await fetch('/api/youtube/playlists/' + encodeURIComponent(chanId));
+    const data = await r.json();
+    if (!r.ok) { status.textContent = 'Failed: ' + (data.error || 'unknown'); return; }
+    const sel = document.getElementById('f-playlist');
+    sel.innerHTML = '<option value="">— Select a playlist —</option>';
+    for (const p of data.playlists) {
+      const o = document.createElement('option');
+      o.value = p.id;
+      const isPublic = p.privacy_status === 'public';
+      o.textContent = p.title + (isPublic ? '' : '  (' + p.privacy_status + ' — must be Public to sync)');
+      sel.appendChild(o);
+    }
+    status.textContent = data.playlists.length + ' playlists loaded.';
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
 async function saveConfig() {
-  const showSel = document.getElementById('f-show');
-  const selectedShow = showSel.options[showSel.selectedIndex];
+  const platform = document.getElementById('f-platform').value;
   const payload = {
     name: document.getElementById('f-name').value.trim(),
     channel_id: parseInt(document.getElementById('f-channel').value) || null,
     source_playlist_id: document.getElementById('f-playlist').value.trim(),
-    destination_api_key: document.getElementById('f-apikey').value.trim(),
-    destination_show_id: showSel.value,
-    destination_show_name: selectedShow ? (selectedShow.dataset.title || selectedShow.textContent) : '',
+    destination_type: platform,
   };
-
+  if (platform === 'transistor') {
+    const showSel = document.getElementById('f-show');
+    const selectedShow = showSel.options[showSel.selectedIndex];
+    payload.destination_api_key = document.getElementById('f-apikey').value.trim();
+    payload.destination_show_id = showSel.value;
+    payload.destination_show_name = selectedShow ? (selectedShow.dataset.title || selectedShow.textContent) : '';
+    payload.has_platform_ads = 0; // Transistor has no ad program
+  } else if (platform === 'buzzsprout') {
+    payload.destination_api_key = document.getElementById('f-bz-token').value.trim();
+    payload.destination_show_id = document.getElementById('f-bz-podcast').value.trim();
+    payload.destination_show_name = document.getElementById('f-bz-name').value.trim();
+    payload.has_platform_ads = document.getElementById('f-ads').checked ? 1 : 0;
+  } else if (platform === 'spreaker') {
+    payload.destination_api_key = document.getElementById('f-sp-token').value.trim();
+    payload.destination_show_id = document.getElementById('f-sp-show').value.trim();
+    payload.destination_show_name = document.getElementById('f-sp-name').value.trim();
+    payload.has_platform_ads = document.getElementById('f-ads').checked ? 1 : 0;
+  }
   const url = editingId ? `/api/audio/configs/${editingId}` : '/api/audio/configs';
   const r = await fetch(url, {
     method: 'POST',
@@ -271,7 +446,91 @@ async function deleteConfig(id) {
   await fetch(`/api/audio/configs/${id}/delete`, { method: 'POST' });
   window.location.reload();
 }
-</script>
 
+async function syncNow(id, btn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Starting...';
+  try {
+    const r = await fetch(`/api/audio/configs/${id}/sync_now`, { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) {
+      alert('Sync failed to start: ' + (data.error || 'unknown'));
+      btn.textContent = original;
+      btn.disabled = false;
+      return;
+    }
+    btn.textContent = 'Sync started';
+    const wrap = document.getElementById('episodes-' + id);
+    if (wrap && !wrap.classList.contains('open')) { loadEpisodes(id); }
+    setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 5000);
+  } catch (e) {
+    alert('Error: ' + e.message);
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+}
+
+function toggleEpisodes(id, btn) {
+  const wrap = document.getElementById('episodes-' + id);
+  if (wrap.classList.contains('open')) {
+    wrap.classList.remove('open');
+    btn.textContent = 'History';
+  } else {
+    loadEpisodes(id);
+    btn.textContent = 'Hide History';
+  }
+}
+
+async function loadEpisodes(id) {
+  const wrap = document.getElementById('episodes-' + id);
+  wrap.classList.add('open');
+  wrap.innerHTML = '<div class="ep-empty">Loading…</div>';
+  try {
+    const r = await fetch(`/api/audio/configs/${id}/episodes`);
+    const data = await r.json();
+    if (!r.ok) { wrap.innerHTML = '<div class="ep-empty">Failed to load history.</div>'; return; }
+    if (!data.episodes || data.episodes.length === 0) {
+      wrap.innerHTML = '<div class="ep-empty">No episodes synced yet.</div>';
+      return;
+    }
+    wrap.innerHTML = '';
+    for (const ep of data.episodes) {
+      const row = document.createElement('div');
+      row.className = 'ep-row';
+      const ok = (ep.status || 'success') === 'success';
+      const badge = ok
+        ? '<span class="badge badge-ok">Success</span>'
+        : '<span class="badge badge-fail">Failed</span>';
+      const title = ep.video_title || ep.youtube_video_id || '—';
+      if (!ok && ep.error_message) {
+        row.innerHTML =
+          '<div style="flex:1;">' +
+            '<div style="display:flex;align-items:center;gap:0.6rem;">' +
+              badge +
+              '<div class="ep-title" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</div>' +
+              '<div class="ep-time">' + escapeHtml(ep.synced_at || '') + '</div>' +
+            '</div>' +
+            '<div class="ep-err">' + escapeHtml(ep.error_message) + '</div>' +
+          '</div>';
+      } else {
+        row.innerHTML =
+          badge +
+          '<div class="ep-title" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</div>' +
+          '<div class="ep-time">' + escapeHtml(ep.synced_at || '') + '</div>';
+      }
+      wrap.appendChild(row);
+    }
+  } catch (e) {
+    wrap.innerHTML = '<div class="ep-empty">Error: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+</script>
 </body>
 </html>

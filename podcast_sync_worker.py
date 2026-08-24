@@ -223,6 +223,62 @@ def buzzsprout_create_episode(api_key: str, podcast_id: str, title: str, audio_p
     return resp.json()
 
 
+def spreaker_create_episode(api_key: str, show_id: str, title: str, audio_path: str,
+                            description: str = "", publish: bool = True):
+    """Create an episode on Spreaker.
+
+    Two paths, because Spreaker's simple upload API publishes immediately
+    and its `hidden` flag means "private", not "draft":
+
+      publish=True  -> single POST to /v2/shows/ID/episodes, goes live
+      publish=False -> create a DRAFT, then attach audio to it. The episode
+                       stays DRAFT until someone sets published_at, so a
+                       monetized show can never go live with an empty slot.
+    """
+    import logging
+    log = logging.getLogger(__name__)
+    base = "https://api.spreaker.com/v2"
+    headers = {"Authorization": "Bearer " + api_key}
+    fname = os.path.basename(audio_path)
+
+    def _episode(resp, what):
+        if not resp.ok:
+            log.error("Spreaker rejected %s: %s %s", what, resp.status_code, resp.text)
+        resp.raise_for_status()
+        body = resp.json() or {}
+        return (body.get("response") or {}).get("episode") or {}
+
+    if publish:
+        with open(audio_path, "rb") as f:
+            r = requests.post(
+                base + "/shows/" + str(show_id) + "/episodes",
+                headers=headers,
+                data={"title": title, "description": description},
+                files={"media_file": (fname, f, "audio/mpeg")},
+                timeout=600,
+            )
+        return _episode(r, "episode create")
+
+    r = requests.post(
+        base + "/episodes/drafts",
+        headers=headers,
+        data={"title": title, "show_id": str(show_id), "description": description},
+        timeout=60,
+    )
+    ep = _episode(r, "draft create")
+    eid = ep.get("episode_id")
+    if not eid:
+        raise RuntimeError("Spreaker draft create returned no episode_id")
+    with open(audio_path, "rb") as f:
+        r2 = requests.post(
+            base + "/episodes/" + str(eid),
+            headers=headers,
+            files={"media_file": (fname, f, "audio/mpeg")},
+            timeout=600,
+        )
+    return _episode(r2, "draft media upload") or ep
+
+
 def publish_episode(destination_type: str, api_key: str, show_id: str, title: str,
                      audio_path: str, description: str, publish: bool):
     """Dispatch episode creation to the right platform. Returns the episode id or None.
@@ -246,6 +302,12 @@ def publish_episode(destination_type: str, api_key: str, show_id: str, title: st
             audio_path=audio_path, description=description, publish=publish,
         )
         return ep.get("id") if ep else None
+    elif destination_type == "spreaker":
+        ep = spreaker_create_episode(
+            api_key=api_key, show_id=show_id, title=title,
+            audio_path=audio_path, description=description, publish=publish,
+        )
+        return ep.get("episode_id") if ep else None
     else:
         raise ValueError(f"Unsupported destination_type: {destination_type!r}")
 
@@ -253,6 +315,32 @@ def publish_episode(destination_type: str, api_key: str, show_id: str, title: st
 # ----------------------------------------------------------------------
 # Main loop
 # ----------------------------------------------------------------------
+
+def _record_episode(conn, config_id, video_id, title, episode_id, status, error_message):
+    """Upsert one row per (config_id, video_id) in audio_synced_episodes.
+
+    Keeps a single row per video so retries update in place instead of
+    accumulating duplicate rows. status is 'success' or 'failed'.
+    """
+    existing = conn.execute(
+        "SELECT id FROM audio_synced_episodes WHERE config_id=? AND youtube_video_id=?",
+        (config_id, video_id),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE audio_synced_episodes SET youtube_video_title=?, "
+            "transistor_episode_id=?, status=?, error_message=?, "
+            "synced_at=CURRENT_TIMESTAMP WHERE id=?",
+            (title, episode_id, status, error_message, existing["id"]),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO audio_synced_episodes "
+            "(config_id, youtube_video_id, youtube_video_title, transistor_episode_id, status, error_message) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (config_id, video_id, title, episode_id, status, error_message),
+        )
+
 
 def process_config(conn, config: dict) -> int:
     """Process one sync config. Returns number of episodes synced."""
@@ -304,7 +392,8 @@ def process_config(conn, config: dict) -> int:
         already = {
             r["youtube_video_id"]
             for r in conn.execute(
-                "SELECT youtube_video_id FROM audio_synced_episodes WHERE config_id=?",
+                "SELECT youtube_video_id FROM audio_synced_episodes "
+                "WHERE config_id=? AND status='success'",
                 (config_id,),
             )
         }
@@ -355,13 +444,8 @@ def process_config(conn, config: dict) -> int:
                     if not should_publish:
                         log.info(f"[cfg={config_id}]   created as DRAFT - ads need approval in destination dashboard")
 
-                # Record success
-                conn.execute(
-                    "INSERT INTO audio_synced_episodes "
-                    "(config_id, youtube_video_id, youtube_video_title, transistor_episode_id) "
-                    "VALUES (?, ?, ?, ?)",
-                    (config_id, video_id, title, episode_id),
-                )
+                # Record success (upsert: one row per config+video)
+                _record_episode(conn, config_id, video_id, title, episode_id, 'success', None)
                 # Bump usage
                 conn.execute(
                     "INSERT INTO usage_monthly (user_id, period, audio_episodes) VALUES (?, ?, 1) "
@@ -373,6 +457,11 @@ def process_config(conn, config: dict) -> int:
 
             except Exception as ep_err:
                 log.error(f"[cfg={config_id}]   FAILED {video_id}: {ep_err}", exc_info=True)
+                try:
+                    _record_episode(conn, config_id, video_id, title, None, 'failed', str(ep_err)[:1000])
+                    conn.commit()
+                except Exception as rec_err:
+                    log.error(f"[cfg={config_id}]   could not record failure for {video_id}: {rec_err}")
                 # Continue with next episode - don't let one bad video stop the config
 
         # Mark run success
@@ -411,11 +500,27 @@ def main():
 
     conn = get_db()
 
-    active = conn.execute(
-        "SELECT c.*, u.has_audio FROM audio_sync_configs c "
-        "JOIN users u ON u.id = c.user_id "
-        "WHERE c.is_active = 1 AND u.has_audio = 1"
-    ).fetchall()
+    # Optional single-config scoping for the Sync Now button.
+    only_config_id = None
+    if '--config-id' in sys.argv:
+        try:
+            only_config_id = int(sys.argv[sys.argv.index('--config-id') + 1])
+        except (ValueError, IndexError):
+            log.error("--config-id requires an integer argument. Aborting.")
+            sys.exit(1)
+    if only_config_id is not None:
+        active = conn.execute(
+            "SELECT c.*, u.has_audio FROM audio_sync_configs c "
+            "JOIN users u ON u.id = c.user_id "
+            "WHERE c.is_active = 1 AND u.has_audio = 1 AND c.id = ?",
+            (only_config_id,),
+        ).fetchall()
+    else:
+        active = conn.execute(
+            "SELECT c.*, u.has_audio FROM audio_sync_configs c "
+            "JOIN users u ON u.id = c.user_id "
+            "WHERE c.is_active = 1 AND u.has_audio = 1"
+        ).fetchall()
     log.info(f"Found {len(active)} active configs (users with audio entitlement).")
 
     total = 0

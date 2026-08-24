@@ -182,7 +182,6 @@ if not OPENAI_API_KEY:
 # they pay nothing, so counting their tier as revenue would be fiction.
 ADMIN_USER_IDS = {1, 2}
 IMAGE_MODEL = os.environ.get('AUTOCLIP_IMAGE_MODEL', 'gpt-image-2')
-YOUTUBE_API_KEY  = "AIzaSyAO6a2xvRYpaVKD27hDzHWPvfxyk7vmB4s"
 
 BASE_DIR         = Path(__file__).parent
 UPLOAD_DIR       = BASE_DIR / "static" / "uploads"
@@ -2950,6 +2949,11 @@ def create_audio_config():
     api_key = (data.get('destination_api_key') or '').strip()
     show_id = (data.get('destination_show_id') or '').strip()
     show_name = (data.get('destination_show_name') or '').strip()
+    destination_type = (data.get('destination_type') or 'transistor').strip().lower()
+    has_platform_ads = 1 if data.get('has_platform_ads') else 0
+    ALLOWED_DESTINATIONS = ('transistor', 'buzzsprout', 'spreaker')
+    if destination_type not in ALLOWED_DESTINATIONS:
+        return jsonify({'error': 'unsupported destination_type; must be transistor, buzzsprout or spreaker'}), 400
     if not (name and channel_id and playlist_id and api_key and show_id):
         return jsonify({'error': 'name, channel_id, source_playlist_id, destination_api_key, destination_show_id required'}), 400
     ch = autoclip_db.get_channel_by_id(int(channel_id))
@@ -2961,9 +2965,10 @@ def create_audio_config():
     cur = db.execute(
         "INSERT INTO audio_sync_configs "
         "(user_id, name, channel_id, source_youtube_channel_id, source_playlist_id, "
-        " destination_type, destination_api_key, destination_show_id, destination_show_name, is_active) "
-        "VALUES (?, ?, ?, ?, ?, 'transistor', ?, ?, ?, 1)",
-        (user['id'], name, ch['id'], ch['youtube_channel_id'], playlist_id, api_key, show_id, show_name)
+        " destination_type, destination_api_key, destination_show_id, destination_show_name, has_platform_ads, is_active) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+        (user['id'], name, ch['id'], ch['youtube_channel_id'], playlist_id,
+         destination_type, api_key, show_id, show_name, has_platform_ads)
     )
     db.commit()
     return jsonify({'id': cur.lastrowid, 'status': 'created'})
@@ -2992,6 +2997,9 @@ def update_audio_config(config_id):
     if 'is_active' in data:
         fields.append("is_active=?")
         values.append(1 if data['is_active'] else 0)
+    if 'has_platform_ads' in data:
+        fields.append("has_platform_ads=?")
+        values.append(1 if data['has_platform_ads'] else 0)
     if not fields:
         return jsonify({'error': 'nothing to update'}), 400
     fields.append("updated_at=CURRENT_TIMESTAMP")
@@ -3013,6 +3021,79 @@ def delete_audio_config(config_id):
     db.execute("DELETE FROM audio_sync_configs WHERE id=?", (config_id,))
     db.commit()
     return jsonify({'status': 'deleted'})
+
+
+@app.route('/api/audio/configs/<int:config_id>/episodes', methods=['GET'])
+def list_audio_episodes(config_id):
+    """Recent synced-episode rows for one config, newest first."""
+    user = autoclip_auth.get_current_user()
+    ok, resp = _audio_gate(user)
+    if not ok:
+        return resp
+    db = autoclip_db.get_db()
+    row = db.execute("SELECT * FROM audio_sync_configs WHERE id=?", (config_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'config not found'}), 404
+    if row['user_id'] != user['id'] and user['role'] != 'admin':
+        return jsonify({'error': 'forbidden'}), 403
+    rows = db.execute(
+        "SELECT youtube_video_id, youtube_video_title, transistor_episode_id, "
+        "status, error_message, synced_at "
+        "FROM audio_synced_episodes WHERE config_id=? "
+        "ORDER BY synced_at DESC LIMIT 50",
+        (config_id,)
+    ).fetchall()
+    episodes = [{
+        'youtube_video_id': r['youtube_video_id'],
+        'video_title': r['youtube_video_title'],
+        'episode_id': r['transistor_episode_id'],
+        'status': r['status'] or 'success',
+        'error_message': r['error_message'],
+        'synced_at': r['synced_at'],
+    } for r in rows]
+    return jsonify({'episodes': episodes})
+
+
+@app.route('/api/audio/configs/<int:config_id>/sync_now', methods=['POST'])
+def sync_audio_config_now(config_id):
+    """Trigger a one-off sync for a single config in the background.
+
+    Shells out to podcast_sync_worker.py --config-id N through bash so it
+    sources the same env file the cron uses. Refuses if a run is already
+    in progress for this config (guards against cron overlap / double-click).
+    """
+    user = autoclip_auth.get_current_user()
+    ok, resp = _audio_gate(user)
+    if not ok:
+        return resp
+    db = autoclip_db.get_db()
+    row = db.execute("SELECT * FROM audio_sync_configs WHERE id=?", (config_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'config not found'}), 404
+    if row['user_id'] != user['id'] and user['role'] != 'admin':
+        return jsonify({'error': 'forbidden'}), 403
+    # Run-lock: refuse if a run for this config started recently and is still 'running'.
+    running = db.execute(
+        "SELECT id FROM audio_sync_runs WHERE config_id=? AND status='running' "
+        "AND started_at >= datetime('now', '-30 minutes') LIMIT 1",
+        (config_id,)
+    ).fetchone()
+    if running:
+        return jsonify({'error': 'A sync is already running for this config. Try again in a few minutes.'}), 409
+    worker = str(BASE_DIR / 'podcast_sync_worker.py')
+    env_file = '/etc/autoclip/podcast_sync.env'
+    cmd = (
+        f"cd {BASE_DIR} && set -a && . {env_file} && set +a && "
+        f"python3 {worker} --config-id {int(config_id)} "
+        f">> /home/harlanhgharris/podcast_sync_worker.log 2>&1"
+    )
+    try:
+        subprocess.Popen(['bash', '-lc', cmd],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except Exception as e:
+        return jsonify({'error': f'could not start sync: {str(e)[:200]}'}), 500
+    return jsonify({'status': 'started'})
 
 
 @app.route('/api/audio/transistor/shows', methods=['POST'])
@@ -4739,9 +4820,13 @@ def list_youtube_playlists(channel_pk):
         )
         yt = build('youtube', 'v3', credentials=creds)
         # mine=true means "belonging to the authenticated user"
-        resp = yt.playlists().list(part='snippet', mine=True, maxResults=50).execute()
+        resp = yt.playlists().list(part='snippet,status', mine=True, maxResults=50).execute()
         playlists = [
-            {'id': p['id'], 'title': p['snippet']['title']}
+            {
+                'id': p['id'],
+                'title': p['snippet']['title'],
+                'privacy_status': p.get('status', {}).get('privacyStatus', 'unknown'),
+            }
             for p in resp.get('items', [])
         ]
         return jsonify({'playlists': playlists})
