@@ -8,15 +8,30 @@ import sqlite3
 from pathlib import Path
 from flask import g
 
+import pgcompat
+
 DB_PATH = str(Path.home() / "cfb_clip_studio" / "autoclip.db")
+
+
+def get_conn():
+    """Standalone connection, no Flask involvement.
+
+    For worker.py / podcast_sync_worker.py and anything outside a request.
+    Caller owns the lifecycle and must close it.
+    """
+    return pgcompat.connect(sqlite_path=DB_PATH)
+
+
+def is_postgres():
+    return pgcompat.backend() == "postgres"
 
 
 def get_db():
     """Get a per-request DB connection."""
     if 'db' not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys = ON")
+        g.db = get_conn()
+        if not is_postgres():
+            g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
 
 
@@ -78,15 +93,21 @@ def create_or_update_user(google_id, email, name, picture_url):
     else:
         role = 'admin' if is_bootstrap_admin else 'member'
         is_approved = 1 if is_bootstrap_admin else 0
-        cur = db.execute(
+        trial_expr = ("CURRENT_TIMESTAMP + INTERVAL '7 days'"
+                      if is_postgres() else "datetime('now', '+7 days')")
+        sql = (
             "INSERT INTO users (google_id, email, name, picture_url, role, is_approved, last_login_at, "
             "trial_started_at, trial_expires_at) "
             "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, "
-            "CURRENT_TIMESTAMP, datetime('now', '+7 days'))",
-            (google_id, email, name, picture_url, role, is_approved)
+            "CURRENT_TIMESTAMP, " + trial_expr + ")"
         )
+        params = (google_id, email, name, picture_url, role, is_approved)
+        if is_postgres():
+            new_id = db.insert_returning_id(sql, params)
+        else:
+            new_id = db.execute(sql, params).lastrowid
         db.commit()
-        return get_user_by_id(cur.lastrowid)
+        return get_user_by_id(new_id)
 
 
 def list_users():
@@ -127,13 +148,18 @@ def get_channel_by_id(channel_id):
 
 def create_channel(youtube_channel_id, title, handle, token_path, owner_user_id=None, long_uploads=False):
     db = get_db()
-    cur = db.execute(
+    sql = (
         "INSERT INTO channels (youtube_channel_id, title, handle, token_path, owner_user_id, long_uploads_enabled) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (youtube_channel_id, title, handle, token_path, owner_user_id, 1 if long_uploads else 0)
+        "VALUES (?, ?, ?, ?, ?, ?)"
     )
+    params = (youtube_channel_id, title, handle, token_path, owner_user_id,
+              1 if long_uploads else 0)
+    if is_postgres():
+        new_id = db.insert_returning_id(sql, params)
+    else:
+        new_id = db.execute(sql, params).lastrowid
     db.commit()
-    return get_channel_by_id(cur.lastrowid)
+    return get_channel_by_id(new_id)
 
 
 def update_channel_owner(channel_id, owner_user_id):
@@ -144,10 +170,7 @@ def update_channel_owner(channel_id, owner_user_id):
     )
     # Also add the owner to user_channels as 'owner' role
     if owner_user_id:
-        db.execute(
-            "INSERT OR REPLACE INTO user_channels (user_id, channel_id, role) VALUES (?, ?, 'owner')",
-            (owner_user_id, channel_id)
-        )
+        db.execute(_upsert_user_channel_sql(), (owner_user_id, channel_id, 'owner'))
     db.commit()
 
 
@@ -187,13 +210,21 @@ def user_has_channel_access_by_yt_id(user_id, youtube_channel_id):
     return row is not None
 
 
+def _upsert_user_channel_sql():
+    """Upsert on the (user_id, channel_id) primary key."""
+    if is_postgres():
+        return ("INSERT INTO user_channels (user_id, channel_id, role) "
+                "VALUES (?, ?, ?) "
+                "ON CONFLICT (user_id, channel_id) "
+                "DO UPDATE SET role = EXCLUDED.role")
+    return ("INSERT OR REPLACE INTO user_channels (user_id, channel_id, role) "
+            "VALUES (?, ?, ?)")
+
+
 def grant_channel_access(user_id, channel_id, role='uploader'):
     assert role in ('owner', 'uploader', 'viewer')
     db = get_db()
-    db.execute(
-        "INSERT OR REPLACE INTO user_channels (user_id, channel_id, role) VALUES (?, ?, ?)",
-        (user_id, channel_id, role)
-    )
+    db.execute(_upsert_user_channel_sql(), (user_id, channel_id, role))
     db.commit()
 
 

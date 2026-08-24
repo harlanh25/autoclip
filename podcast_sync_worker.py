@@ -56,9 +56,10 @@ log = logging.getLogger(__name__)
 # ----------------------------------------------------------------------
 
 def get_db():
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    import db as _db
+    conn = _db.get_conn()
+    if not _db.is_postgres():
+        conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -387,11 +388,12 @@ def process_config(conn, config: dict) -> int:
     log.info(f"[cfg={config_id} {name}] Starting sync")
 
     # Start run record
-    cur = conn.execute(
-        "INSERT INTO audio_sync_runs (config_id, status) VALUES (?, 'running')",
-        (config_id,),
-    )
-    run_id = cur.lastrowid
+    import db as _db
+    _run_sql = "INSERT INTO audio_sync_runs (config_id, status) VALUES (?, 'running')"
+    if _db.is_postgres():
+        run_id = conn.insert_returning_id(_run_sql, (config_id,))
+    else:
+        run_id = conn.execute(_run_sql, (config_id,)).lastrowid
     conn.commit()
 
     synced_count = 0

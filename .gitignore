@@ -43,3 +43,9 @@ worker.py.bak-*
 *.swp
 *.swo
 .DS_Store
+
+# migration and patch scratch files
+*.bak*
+*.pre_pg
+patch_*.py
+endpoints_snippet.py

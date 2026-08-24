@@ -40,6 +40,9 @@ def _load_app():
 
 
 def db_conn():
+    import db as _db
+    if _db.is_postgres():
+        return _db.get_conn()
     conn = sqlite3.connect(DB, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn

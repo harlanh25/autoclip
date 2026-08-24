@@ -53,9 +53,20 @@ def apply_schema(conn):
         stmt = stmt.strip()
         if not stmt:
             continue
+        import db as _db
+        _pg = _db.is_postgres()
+        if _pg:
+            # Postgres aborts the whole transaction on any failed statement,
+            # so each DDL gets its own savepoint to roll back in isolation.
+            conn.execute("SAVEPOINT stmt_sp")
         try:
             conn.execute(stmt)
-        except sqlite3.OperationalError as e:
+            if _pg:
+                conn.execute("RELEASE SAVEPOINT stmt_sp")
+        except Exception as e:
+            if _pg:
+                conn.execute("ROLLBACK TO SAVEPOINT stmt_sp")
+                conn.execute("RELEASE SAVEPOINT stmt_sp")
             msg = str(e).lower()
             if "duplicate column" in msg or "already exists" in msg:
                 # Already applied. Fine.
@@ -146,9 +157,10 @@ def main():
     print("AutoClip audio + usage bootstrap")
     print("=" * 60)
 
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    import db as _db
+    conn = _db.get_conn()
+    if not _db.is_postgres():
+        conn.execute("PRAGMA foreign_keys = ON")
 
     # 1. Schema
     apply_schema(conn)
