@@ -96,6 +96,30 @@ def fetch_playlist_videos(playlist_id: str, max_results: int = 20):
             "title": snippet.get("title"),
             "publishedAt": snippet.get("publishedAt"),
         })
+
+    # playlistItems carries the PLAYLIST ITEM's description, which can be
+    # stale or truncated. Fetch the real video descriptions in one batched
+    # videos.list call (up to 50 ids) and attach them.
+    ids = [i["videoId"] for i in items if i.get("videoId")]
+    descs = {}
+    for start in range(0, len(ids), 50):
+        chunk = ids[start:start + 50]
+        try:
+            vr = requests.get(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={"part": "snippet", "id": ",".join(chunk),
+                        "key": YOUTUBE_API_KEY},
+                timeout=30,
+            )
+            vr.raise_for_status()
+            for v in vr.json().get("items", []):
+                descs[v.get("id")] = (v.get("snippet") or {}).get("description") or ""
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "videos.list description fetch failed: %s", e)
+    for i in items:
+        i["description"] = descs.get(i.get("videoId"), "")
     return items
 
 
@@ -342,6 +366,18 @@ def _record_episode(conn, config_id, video_id, title, episode_id, status, error_
         )
 
 
+def _episode_description(video: dict, video_id: str) -> str:
+    """Episode notes: the real YouTube description, with a source link
+    appended. Falls back to just the link when the video has no
+    description, so an episode is never published with empty notes.
+    """
+    desc = ((video or {}).get("description") or "").strip()
+    link = f"https://www.youtube.com/watch?v={video_id}"
+    if not desc:
+        return f"Source: {link}"
+    return f"{desc}\n\nSource: {link}"
+
+
 def process_config(conn, config: dict) -> int:
     """Process one sync config. Returns number of episodes synced."""
     config_id = config["id"]
@@ -438,7 +474,7 @@ def process_config(conn, config: dict) -> int:
                         show_id=config["destination_show_id"],
                         title=title,
                         audio_path=mp3_path,
-                        description=f"Source: https://www.youtube.com/watch?v={video_id}",
+                        description=_episode_description(v, video_id),
                         publish=should_publish,
                     )
                     if not should_publish:
