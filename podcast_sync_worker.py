@@ -487,7 +487,7 @@ def process_config(conn, config: dict) -> int:
                 # Bump usage
                 conn.execute(
                     "INSERT INTO usage_monthly (user_id, period, audio_episodes) VALUES (?, ?, 1) "
-                    "ON CONFLICT(user_id, period) DO UPDATE SET audio_episodes = audio_episodes + 1",
+                    "ON CONFLICT(user_id, period) DO UPDATE SET audio_episodes = usage_monthly.audio_episodes + 1",
                     (user_id, period),
                 )
                 conn.commit()
@@ -500,6 +500,11 @@ def process_config(conn, config: dict) -> int:
                     conn.commit()
                 except Exception as rec_err:
                     log.error(f"[cfg={config_id}]   could not record failure for {video_id}: {rec_err}")
+                    # Reset the connection so the next episode can be recorded.
+                    try:
+                        conn.rollback()
+                    except Exception as rb_err:
+                        log.error(f"[cfg={config_id}]   rollback failed: {rb_err}")
                 # Continue with next episode - don't let one bad video stop the config
 
         # Mark run success
@@ -517,6 +522,11 @@ def process_config(conn, config: dict) -> int:
 
     except Exception as e:
         log.error(f"[cfg={config_id}] Sync failed entirely: {e}", exc_info=True)
+        # Clear any aborted transaction so the status write below can run.
+        try:
+            conn.rollback()
+        except Exception as rb_err:
+            log.error(f"[cfg={config_id}] rollback failed: {rb_err}")
         conn.execute(
             "UPDATE audio_sync_runs SET finished_at=CURRENT_TIMESTAMP, status='error', "
             "episodes_synced=?, error_message=? WHERE id=?",
@@ -568,6 +578,13 @@ def main():
             total += process_config(conn, cfg)
         except Exception as e:
             log.error(f"Unhandled error on config {cfg.get('id')}: {e}", exc_info=True)
+            # Postgres aborts the whole transaction on any failed statement.
+            # Without this rollback the connection is unusable and every
+            # remaining config fails with InFailedSqlTransaction.
+            try:
+                conn.rollback()
+            except Exception as rb_err:
+                log.error(f"rollback failed after config {cfg.get('id')}: {rb_err}")
 
     log.info(f"Sync complete. Total episodes synced across all configs: {total}")
     conn.close()

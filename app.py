@@ -1033,7 +1033,7 @@ def create_clip(session_id):
             _db = autoclip_db.get_db()
             _db.execute(
                 'INSERT INTO usage_monthly (user_id, period, clipping_clips) VALUES (?, ?, 1) '
-                'ON CONFLICT(user_id, period) DO UPDATE SET clipping_clips = clipping_clips + 1',
+                'ON CONFLICT(user_id, period) DO UPDATE SET clipping_clips = usage_monthly.clipping_clips + 1',
                 (_u['id'], _period)
             )
             _db.commit()
@@ -2865,7 +2865,7 @@ def _increment_usage(user_id, field, amount=1):
     db = autoclip_db.get_db()
     db.execute(
         f"INSERT INTO usage_monthly (user_id, period, {field}) VALUES (?, ?, ?) "
-        f"ON CONFLICT(user_id, period) DO UPDATE SET {field} = {field} + ?",
+        f"ON CONFLICT(user_id, period) DO UPDATE SET {field} = usage_monthly.{field} + ?",
         (user_id, period, amount, amount)
     )
     db.commit()
@@ -4813,7 +4813,7 @@ def upload_chunks_complete():
         _db = autoclip_db.get_db()
         _db.execute(
             "INSERT INTO usage_monthly (user_id, period, clipping_shows) VALUES (?, ?, 1) "
-            "ON CONFLICT(user_id, period) DO UPDATE SET clipping_shows = clipping_shows + 1",
+            "ON CONFLICT(user_id, period) DO UPDATE SET clipping_shows = usage_monthly.clipping_shows + 1",
             (user['id'], _period)
         )
         _db.commit()
