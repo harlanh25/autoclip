@@ -25,6 +25,14 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 import google.auth.transport.requests
 import db as autoclip_db
+
+
+def _recent_cutoff_30min():
+    """SQL literal for 'thirty minutes ago', per backend."""
+    if autoclip_db.is_postgres():
+        return "NOW() - INTERVAL '30 minutes'"
+    return "datetime('now', '-30 minutes')"
+
 import auth as autoclip_auth
 from flask import session as flask_session
 
@@ -3083,7 +3091,7 @@ def sync_audio_config_now(config_id):
     # Run-lock: refuse if a run for this config started recently and is still 'running'.
     running = db.execute(
         "SELECT id FROM audio_sync_runs WHERE config_id=? AND status='running' "
-        "AND started_at >= datetime('now', '-30 minutes') LIMIT 1",
+        "AND started_at >= " + _recent_cutoff_30min() + " LIMIT 1",
         (config_id,)
     ).fetchone()
     if running:

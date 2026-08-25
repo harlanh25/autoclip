@@ -105,10 +105,12 @@ def user_plan_summary(user):
 
 def video_usage_this_month(db, user_id):
     """Count of published (not failed) video jobs for the current calendar month."""
+    import db as _db
     row = db.execute(
         "SELECT COUNT(*) FROM publish_jobs "
         "WHERE user_id=? AND status='done' "
-        "AND strftime('%Y-%m', COALESCE(finished_at, created_at)) = strftime('%Y-%m', 'now')",
+        "AND %s = %s" % (_db.month_expr("COALESCE(finished_at, created_at)"),
+                         _db.current_month_expr()),
         (user_id,)
     ).fetchone()
     return row[0] if row else 0
@@ -352,9 +354,11 @@ def thumbnail_pool_for_user(user):
 
 
 def thumbnails_used_this_month(db, user_id):
+    import db as _db
     row = db.execute(
         "SELECT COUNT(*) FROM thumbnail_generations "
-        "WHERE user_id=? AND strftime('%Y-%m', created_at) = strftime('%Y-%m','now')",
+        "WHERE user_id=? AND %s = %s" % (_db.month_expr("created_at"),
+                                         _db.current_month_expr()),
         (user_id,)
     ).fetchone()
     return row[0] if row else 0

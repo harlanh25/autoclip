@@ -104,13 +104,15 @@ def record_storage_snapshot(db, user_id, gb):
 
 def user_costs(db, user_id, month=None):
     """Cost breakdown by kind for a user. month='YYYY-MM', default current."""
+    import db as _db
     where = "user_id=?"
     args = [user_id]
     if month:
-        where += " AND strftime('%Y-%m', created_at)=?"
+        where += " AND %s=?" % _db.month_expr("created_at")
         args.append(month)
     else:
-        where += " AND strftime('%Y-%m', created_at)=strftime('%Y-%m','now')"
+        where += " AND %s=%s" % (_db.month_expr("created_at"),
+                                 _db.current_month_expr())
     rows = db.execute(
         f"SELECT kind, COUNT(*) n, SUM(quantity) qty, SUM(cost_usd) cost "
         f"FROM usage_events WHERE {where} GROUP BY kind ORDER BY cost DESC", args
@@ -121,8 +123,10 @@ def user_costs(db, user_id, month=None):
 
 def all_user_costs(db, month=None):
     """Every user's total for a month, most expensive first."""
-    clause = ("strftime('%Y-%m', e.created_at)=?" if month
-              else "strftime('%Y-%m', e.created_at)=strftime('%Y-%m','now')")
+    import db as _db
+    clause = (("%s=?" % _db.month_expr("e.created_at")) if month
+              else ("%s=%s" % (_db.month_expr("e.created_at"),
+                               _db.current_month_expr())))
     args = [month] if month else []
     rows = db.execute(
         f"SELECT u.id, u.email, u.name, u.video_tier, u.audio_tier, "
@@ -135,9 +139,10 @@ def all_user_costs(db, month=None):
 
 
 def available_months(db):
+    import db as _db
     rows = db.execute(
-        "SELECT DISTINCT strftime('%Y-%m', created_at) m FROM usage_events "
-        "ORDER BY m DESC"
+        "SELECT DISTINCT %s m FROM usage_events "
+        "ORDER BY m DESC" % _db.month_expr("created_at")
     ).fetchall()
     return [r[0] for r in rows if r[0]]
 

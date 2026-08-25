@@ -125,12 +125,12 @@
         </td>
         <td style="font-size: 0.8rem;">
           {% if u.trial_expires_at %}
-            <span style="color: var(--muted);">{{ u.trial_expires_at.split(' ')[0] if u.trial_expires_at else '' }}</span>
+            <span style="color: var(--muted);">{{ u.trial_expires_at.strftime('%Y-%m-%d') if u.trial_expires_at is not string else u.trial_expires_at.split(' ')[0] }}</span>
           {% else %}
             <span style="color: var(--muted);">—</span>
           {% endif %}
         </td>
-        <td style="color: var(--muted); font-size: 0.85rem;">{{ u.created_at.split('T')[0] if 'T' in u.created_at else u.created_at.split(' ')[0] }}</td>
+        <td style="color: var(--muted); font-size: 0.85rem;">{{ u.created_at.strftime('%Y-%m-%d') if u.created_at is not string else (u.created_at.split('T')[0] if 'T' in u.created_at else u.created_at.split(' ')[0]) }}</td>
         <td>
           <div class="actions">
             {% if not u.is_approved %}

@@ -49,3 +49,8 @@ worker.py.bak-*
 *.pre_pg
 patch_*.py
 endpoints_snippet.py
+
+# database exports contain production PII — never commit
+pgexport/
+pg_load.sql
+pg_sequences.sql

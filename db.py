@@ -26,6 +26,27 @@ def is_postgres():
     return pgcompat.backend() == "postgres"
 
 
+def month_expr(col):
+    """SQL that renders a timestamp column as 'YYYY-MM'."""
+    if is_postgres():
+        return "to_char(%s, 'YYYY-MM')" % col
+    return "strftime('%%Y-%%m', %s)" % col
+
+
+def current_month_expr():
+    """SQL for the current calendar month as 'YYYY-MM'."""
+    if is_postgres():
+        return "to_char(NOW(), 'YYYY-MM')"
+    return "strftime('%Y-%m','now')"
+
+
+def epoch_age_expr(col):
+    """SQL for seconds elapsed since a timestamp column."""
+    if is_postgres():
+        return "EXTRACT(EPOCH FROM (NOW() - %s))" % col
+    return "(strftime('%%s','now') - strftime('%%s',%s))" % col
+
+
 def get_db():
     """Get a per-request DB connection."""
     if 'db' not in g:

@@ -39,6 +39,11 @@ def _load_app():
     return _app_mod
 
 
+def _orphan_age_expr():
+    import db as _db
+    return _db.epoch_age_expr("heartbeat_at")
+
+
 def db_conn():
     import db as _db
     if _db.is_postgres():
@@ -65,7 +70,7 @@ def mark_orphaned_jobs():
             "    finished_at=CURRENT_TIMESTAMP "
             "WHERE status='running' "
             "  AND (heartbeat_at IS NULL "
-            f"       OR strftime('%s','now') - strftime('%s',heartbeat_at) > {ORPHAN_TIMEOUT_SEC})"
+            f"       OR {_orphan_age_expr()} > {ORPHAN_TIMEOUT_SEC})"
         ).rowcount
         conn.commit()
         if n:
