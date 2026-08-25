@@ -40,6 +40,14 @@ def current_month_expr():
     return "strftime('%Y-%m','now')"
 
 
+def insert_or_ignore(sql):
+    """Translate 'INSERT OR IGNORE' to the backend's equivalent."""
+    if is_postgres():
+        return sql.replace("INSERT OR IGNORE INTO", "INSERT INTO", 1) \
+                  .rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+    return sql
+
+
 def epoch_age_expr(col):
     """SQL for seconds elapsed since a timestamp column."""
     if is_postgres():

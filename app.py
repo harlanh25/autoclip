@@ -1924,20 +1924,23 @@ def publish_async_create(session_id):
             'existing_status': existing['status']
         }), 409
 
-    cur = db.execute(
+    _sql = (
         "INSERT INTO publish_jobs "
         "(session_id, segment_index, user_id, status, privacy, publish_payload) "
-        "VALUES (?, ?, ?, 'pending', ?, ?)",
-        (
-            session_id,
-            segment_index,
-            user['id'],
-            payload.get('privacy', 'private'),
-            _json.dumps(payload)
-        )
+        "VALUES (?, ?, ?, 'pending', ?, ?)"
     )
+    _params = (
+        session_id,
+        segment_index,
+        user['id'],
+        payload.get('privacy', 'private'),
+        _json.dumps(payload)
+    )
+    if autoclip_db.is_postgres():
+        job_id = db.insert_returning_id(_sql, _params)
+    else:
+        job_id = db.execute(_sql, _params).lastrowid
     db.commit()
-    job_id = cur.lastrowid
     app.logger.info(f'Inserted publish job {job_id} for session {session_id} segment {segment_index}')
 
     # Enqueue Cloud Task so GPU worker picks it up
@@ -2407,8 +2410,9 @@ def generate_thumbnail():
             if internal_ch:
                 _u = autoclip_auth.get_current_user()
                 autoclip_db.get_db().execute(
-                    'INSERT OR IGNORE INTO thumbnails_library (channel_id, gcs_key, source_type, source_session_id, source_segment_index, created_by_user_id) '
-                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    autoclip_db.insert_or_ignore(
+                        'INSERT OR IGNORE INTO thumbnails_library (channel_id, gcs_key, source_type, source_session_id, source_segment_index, created_by_user_id) '
+                        'VALUES (?, ?, ?, ?, ?, ?)'),
                     (internal_ch['id'], gcs_key, 'generated', session_id, segment_index, _u['id'] if _u else None)
                 )
                 autoclip_db.get_db().commit()
@@ -2978,16 +2982,20 @@ def create_audio_config():
     if user['role'] != 'admin' and not autoclip_db.user_has_channel_access(user['id'], ch['id']):
         return jsonify({'error': 'no access to that channel'}), 403
     db = autoclip_db.get_db()
-    cur = db.execute(
+    _sql = (
         "INSERT INTO audio_sync_configs "
         "(user_id, name, channel_id, source_youtube_channel_id, source_playlist_id, "
         " destination_type, destination_api_key, destination_show_id, destination_show_name, has_platform_ads, is_active) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-        (user['id'], name, ch['id'], ch['youtube_channel_id'], playlist_id,
-         destination_type, api_key, show_id, show_name, has_platform_ads)
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
     )
+    _params = (user['id'], name, ch['id'], ch['youtube_channel_id'], playlist_id,
+               destination_type, api_key, show_id, show_name, has_platform_ads)
+    if autoclip_db.is_postgres():
+        new_id = db.insert_returning_id(_sql, _params)
+    else:
+        new_id = db.execute(_sql, _params).lastrowid
     db.commit()
-    return jsonify({'id': cur.lastrowid, 'status': 'created'})
+    return jsonify({'id': new_id, 'status': 'created'})
 
 
 @app.route('/api/audio/configs/<int:config_id>', methods=['POST'])
@@ -3554,8 +3562,9 @@ def upload_custom_thumbnail(session_id):
             if internal_ch:
                 _u = autoclip_auth.get_current_user()
                 autoclip_db.get_db().execute(
-                    'INSERT OR IGNORE INTO thumbnails_library (channel_id, gcs_key, source_type, source_session_id, source_segment_index, created_by_user_id) '
-                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    autoclip_db.insert_or_ignore(
+                        'INSERT OR IGNORE INTO thumbnails_library (channel_id, gcs_key, source_type, source_session_id, source_segment_index, created_by_user_id) '
+                        'VALUES (?, ?, ?, ?, ?, ?)'),
                     (internal_ch['id'], gcs_key, 'uploaded', session_id, segment_index, _u['id'] if _u else None)
                 )
                 autoclip_db.get_db().commit()
@@ -3788,9 +3797,10 @@ def execute_all(session_id):
                     if _ch_row:
                         _u = autoclip_auth.get_current_user()
                         autoclip_db.get_db().execute(
-                            'INSERT OR IGNORE INTO thumbnails_library '
-                            '(channel_id, gcs_key, source_type, source_session_id, source_segment_index, created_by_user_id) '
-                            'VALUES (?, ?, ?, ?, ?, ?)',
+                            autoclip_db.insert_or_ignore(
+                                'INSERT OR IGNORE INTO thumbnails_library '
+                                '(channel_id, gcs_key, source_type, source_session_id, source_segment_index, created_by_user_id) '
+                                'VALUES (?, ?, ?, ?, ?, ?)'),
                             (_ch_row['id'], thumb_key, 'generated', session_id, i, _u['id'] if _u else None)
                         )
                         autoclip_db.get_db().commit()
@@ -4043,15 +4053,20 @@ def thumbnails_library_upload():
         return jsonify({'error': f'gcs upload failed: {e}'}), 500
 
     try:
-        cur = db.execute(
+        _sql = autoclip_db.insert_or_ignore(
             "INSERT OR IGNORE INTO thumbnails_library "
             "(channel_id, gcs_key, source_type, source_session_id, source_segment_index, "
             "created_by_user_id, is_style_reference) "
-            "VALUES (?, ?, 'uploaded', NULL, NULL, ?, 1)",
-            (channel_id, gcs_key, user['id'])
+            "VALUES (?, ?, 'uploaded', NULL, NULL, ?, 1)"
         )
+        _params = (channel_id, gcs_key, user['id'])
+        if autoclip_db.is_postgres():
+            # ON CONFLICT DO NOTHING returns no row when ignored -> None,
+            # which falls through to the SELECT below, same as sqlite's 0.
+            thumb_id = db.insert_returning_id(_sql, _params)
+        else:
+            thumb_id = db.execute(_sql, _params).lastrowid
         db.commit()
-        thumb_id = cur.lastrowid
         if not thumb_id:
             row = db.execute(
                 "SELECT id FROM thumbnails_library WHERE gcs_key=?", (gcs_key,)
@@ -4241,15 +4256,19 @@ def ads_library_upload():
         return jsonify({'error': f'gcs upload failed: {e}'}), 500
 
     try:
-        cur = db.execute(
+        _sql = autoclip_db.insert_or_ignore(
             "INSERT OR IGNORE INTO ads "
             "(channel_id, gcs_key, display_name, duration_sec, file_size_bytes, "
             "content_type, created_by_user_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (channel_id, gcs_key, display_name, duration, len(data), content_type, user['id'])
+            "VALUES (?, ?, ?, ?, ?, ?, ?)"
         )
+        _params = (channel_id, gcs_key, display_name, duration, len(data),
+                   content_type, user['id'])
+        if autoclip_db.is_postgres():
+            ad_id = db.insert_returning_id(_sql, _params)
+        else:
+            ad_id = db.execute(_sql, _params).lastrowid
         db.commit()
-        ad_id = cur.lastrowid
         if not ad_id:
             row = db.execute("SELECT id FROM ads WHERE gcs_key=?", (gcs_key,)).fetchone()
             ad_id = row['id'] if row else None
@@ -4474,7 +4493,8 @@ def ads_library_set_role(ad_id):
 
     ch_id = row['channel_id']
     db.execute(
-        "INSERT OR IGNORE INTO channel_ad_config (channel_id) VALUES (?)", (ch_id,)
+        autoclip_db.insert_or_ignore(
+            "INSERT OR IGNORE INTO channel_ad_config (channel_id) VALUES (?)"), (ch_id,)
     )
     if role == 'intro':
         db.execute(
@@ -5029,8 +5049,9 @@ def generate_thumbnail_with_refs():
             if internal_ch:
                 _u = autoclip_auth.get_current_user()
                 autoclip_db.get_db().execute(
-                    'INSERT OR IGNORE INTO thumbnails_library (channel_id, gcs_key, source_type, source_session_id, source_segment_index, created_by_user_id) '
-                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    autoclip_db.insert_or_ignore(
+                        'INSERT OR IGNORE INTO thumbnails_library (channel_id, gcs_key, source_type, source_session_id, source_segment_index, created_by_user_id) '
+                        'VALUES (?, ?, ?, ?, ?, ?)'),
                     (internal_ch['id'], gcs_key, 'generated_with_refs', session_id, segment_index, _u['id'] if _u else None)
                 )
                 autoclip_db.get_db().commit()
