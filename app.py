@@ -3534,6 +3534,14 @@ def update_segment(session_id):
         return jsonify({'error': 'segment_index out of range'}), 400
 
     segment = session['segments'][segment_index]
+    # Capture the pre-edit boundaries so we can tell an actual time change from
+    # a save that merely echoes the existing start/end back (which every
+    # title/description/thumbnail save does).
+    try:
+        _old_s = float(segment.get('start_time') if segment.get('start_time') is not None else segment.get('start') or 0)
+        _old_e = float(segment.get('end_time') if segment.get('end_time') is not None else segment.get('end') or 0)
+    except (TypeError, ValueError):
+        _old_s = _old_e = None
     for key in ('start', 'end', 'title', 'description'):
         if key in data:
             segment[key] = data[key]
@@ -3546,6 +3554,15 @@ def update_segment(session_id):
     # execute_all only cuts when clip_gcs_key is missing, so clearing it here
     # is what makes the re-cut happen. Without this the user edits the times,
     # sees them saved, and still publishes the original cut.
+    _times_changed = False
+    if ('start' in data or 'end' in data) and _old_s is not None:
+        try:
+            _times_changed = (
+                abs(float(segment.get('start_time') or 0) - _old_s) > 0.001
+                or abs(float(segment.get('end_time') or 0) - _old_e) > 0.001
+            )
+        except (TypeError, ValueError):
+            _times_changed = True
     if 'start' in data or 'end' in data:
         try:
             _s = float(segment.get('start_time') or 0)
@@ -3554,7 +3571,7 @@ def update_segment(session_id):
             return jsonify({'error': 'start/end must be numeric'}), 400
         if _e <= _s:
             return jsonify({'error': f'end ({_e}) must be greater than start ({_s})'}), 400
-        if segment.get('clip_gcs_key') or segment.get('clip_path'):
+        if _times_changed and (segment.get('clip_gcs_key') or segment.get('clip_path')):
             app.logger.info(
                 f'segment {segment_index} of {session_id}: times changed, '
                 f'invalidating clip for re-cut')
