@@ -319,7 +319,8 @@
     <div class="card" id="segments-card" style="opacity: 0.4; pointer-events: none;">
       <h2>✂️ Define Segments <span class="badge" id="segments-badge">Step 2</span></h2>
       <p style="color: #888; font-size: 0.875rem; margin-bottom: 1.25rem;">
-        Enter the topics for each segment. The AI will find the timestamps in the transcript.
+        Enter the topics for each segment and the AI will find the timestamps. Not sure what to
+        clip? Let AutoClip read the transcript and pick the segments for you.
       </p>
       <ul class="topic-list" id="topic-list">
         <li class="topic-item">
@@ -333,7 +334,11 @@
       </ul>
       <button class="add-topic" onclick="addTopic()">+ Add another segment</button>
       <br><br>
-      <button class="btn" onclick="detectSegments()">Detect Segments with AI</button>
+      <button class="btn" id="detect-topics-btn" onclick="detectSegments()">Detect Segments with AI</button>
+      <button class="btn" id="detect-auto-btn" onclick="detectSegmentsAuto()"
+              style="margin-left:0.5rem; background:transparent; border:1px solid #444; color:#bbb;">
+        Not sure? Let AutoClip pick
+      </button>
     </div>
 
     <!-- Step 3: Review Segments -->
@@ -404,6 +409,12 @@
           document.getElementById('transcript-output').style.display = 'block';
         }
       } catch (e) { console.error('transcript restore failed', e); }
+    } else {
+      // No transcript yet - transcription is required before anything else,
+      // so start it automatically instead of making the user click. The
+      // server returns 409 if a run is already in flight, so a refresh
+      // mid-transcription will not fire a second paid Whisper job.
+      transcribeVideo();
     }
   });
 
@@ -534,6 +545,14 @@
     btn.parentElement.remove();
   }
 
+  // Auto mode: send no topics. The backend's detect_segments already has
+  // a second prompt that discovers segments when topics are omitted; it
+  // was unreachable because the UI required at least one topic.
+  async function detectSegmentsAuto() {
+    log('Reading the transcript and choosing segments...');
+    return _runDetect({}, document.getElementById('detect-auto-btn'));
+  }
+
   async function detectSegments() {
     const inputs = document.querySelectorAll('#topic-list input');
     const topics = Array.from(inputs).map(i => i.value).filter(v => v.trim());
@@ -544,22 +563,28 @@
     }
 
     log(`Detecting segments for ${topics.length} topics...`);
-    const btn = document.querySelector('#segments-card .btn');
-    btn.disabled = true;
+    return _runDetect({ topics }, document.getElementById('detect-topics-btn'));
+  }
+
+  async function _runDetect(payload, btn) {
+    const label = btn.textContent;
+    const both = ['detect-topics-btn','detect-auto-btn']
+      .map(function(i){ return document.getElementById(i); }).filter(Boolean);
+    both.forEach(function(b){ b.disabled = true; });
     btn.textContent = 'Detecting...';
 
     try {
       const resp = await fetch(`/api/detect_segments/${SESSION_ID}`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ topics })
+        body: JSON.stringify(payload)
       });
       const data = await resp.json();
 
       if (data.error) {
         log('Error: ' + data.error, 'error');
-        btn.disabled = false;
-        btn.textContent = 'Detect Segments with AI';
+        both.forEach(function(x){ x.disabled = false; });
+        btn.textContent = label;
         return;
       }
 
@@ -576,8 +601,8 @@
 
     } catch(e) {
       log('Detection failed: ' + e.message, 'error');
-      btn.disabled = false;
-      btn.textContent = 'Detect Segments with AI';
+      both.forEach(function(x){ x.disabled = false; });
+      btn.textContent = label;
     }
   }
 

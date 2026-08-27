@@ -507,6 +507,21 @@ def complete_upload():
 @app.route('/api/transcribe/<session_id>', methods=['POST'])
 def transcribe(session_id):
     """Transcribe the video using OpenAI Whisper API with chunking for large files."""
+    # Transcription is synchronous and bills per minute. The studio page
+    # auto-starts it on load, so a refresh mid-run would fire a second paid
+    # Whisper job. Return an existing transcript instead of redoing it, and
+    # reject re-entry while one is in flight (45min > slowest real run).
+    _pre = load_session(session_id) or {}
+    if _pre.get("transcript"):
+        return jsonify({"status": "transcribed",
+                        "segments_count": len(_pre["transcript"]),
+                        "transcript": _pre["transcript"]})
+    _started = _pre.get("transcribe_started_at")
+    if _started and (time.time() - float(_started)) < 2700:
+        return jsonify({"error": "Transcription already in progress for this session."}), 409
+    if _pre:
+        _pre["transcribe_started_at"] = time.time()
+        save_session(session_id, _pre)
     session = load_session(session_id)
     if not session:
         return jsonify({'error': 'Session not found'}), 404
@@ -730,6 +745,14 @@ Identify the distinct topical segments of the show. A segment is a sustained dis
 
 Segments are NOT contiguous. Ad reads, sponsor segments, merch/housekeeping and channel promos sit BETWEEN segments and belong to no segment - leave gaps.
 
+LENGTH AND SELECTIVITY - these matter more than coverage:
+- A segment MUST run at least 6 minutes (360 seconds). 8 minutes or more is strongly preferred.
+- This is a filter, NOT a target. Do NOT stretch a segment's boundaries to reach 6 minutes. If a genuinely good discussion only runs 4 minutes, DISCARD it rather than padding it with surrounding material.
+- The ONLY exception: a shorter segment may be included if it is exceptional on its own - a complete, self-contained take with a clear beginning and payoff that would stand alone as a video.
+- Be selective. Returning 2 or 3 strong segments is a BETTER result than returning 6 mediocre ones. Do not try to cover the whole show.
+- Skip discussion that is mostly agreement, list-reading, score recitation, or repetition of a point already made.
+- Prefer segments with a genuine argument, disagreement, prediction, or reveal - something a viewer would want to hear the end of.
+
 For each real segment, provide:
 1. A short topic name (3-6 words)
 2. start_time in seconds (integer)
@@ -762,17 +785,35 @@ Return ONLY a JSON object:
                 _session_id=session_id,
                 model=SEGMENT_MODEL,
                 max_tokens=16000,
-                temperature=0.2,
                 messages=[
                     {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": "{"},
                 ],
             )
             if getattr(_resp, 'stop_reason', None) == 'max_tokens':
                 app.logger.error(
                     'detect_segments: response TRUNCATED at max_tokens - '
                     'segments will be incomplete. Raise max_tokens.')
-            _txt = '{' + _resp.content[0].text
+            # claude-sonnet-5 rejects assistant prefill, so the reply is a
+            # normal message. Strip any markdown fence and slice from the
+            # first brace to the last so stray preamble cannot break parsing.
+            # content[0] may be a ThinkingBlock on reasoning models, so take
+            # the first block that actually carries text.
+            _txt = ""
+            for _blk in _resp.content:
+                if getattr(_blk, "type", None) == "text" or hasattr(_blk, "text"):
+                    _cand = getattr(_blk, "text", "") or ""
+                    if _cand.strip():
+                        _txt = _cand
+                        break
+            _txt = _txt.strip()
+            if _txt.startswith("```"):
+                _txt = _txt.split("\n", 1)[1] if "\n" in _txt else _txt[3:]
+            if _txt.endswith("```"):
+                _txt = _txt[:-3]
+            _txt = _txt.strip()
+            _i, _j = _txt.find("{"), _txt.rfind("}")
+            if _i != -1 and _j != -1:
+                _txt = _txt[_i:_j + 1]
             raw_segs = json.loads(_txt).get('segments', [])
             app.logger.info(
                 f'detect_segments: {SEGMENT_MODEL} returned {len(raw_segs)} segments '
