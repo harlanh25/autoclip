@@ -2448,9 +2448,27 @@ def load_session(session_id):
     return None
 
 def save_session(session_id, data):
+    """Atomic write: dump to a temp file in the same directory, fsync, then
+    os.replace() onto the target. os.replace is atomic on POSIX, so a
+    concurrent reader sees either the complete old file or the complete new
+    one, never a truncated one. Plain open(path,'w') truncates immediately
+    and leaves the session empty if the process dies mid-dump.
+    """
+    import os as _os, tempfile as _tempfile
     path = SESSIONS_DIR / f"{session_id}.json"
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
+    fd, tmp = _tempfile.mkstemp(dir=str(SESSIONS_DIR), prefix=f".{session_id}.", suffix=".tmp")
+    try:
+        with _os.fdopen(fd, 'w') as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            _os.fsync(f.fileno())
+        _os.replace(tmp, path)
+    except Exception:
+        try:
+            _os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 def load_ads():
     path = ADS_DIR / 'ads.json'
@@ -2460,9 +2478,22 @@ def load_ads():
     return []
 
 def save_ads(ads):
+    """Atomic write - see save_session for rationale."""
+    import os as _os, tempfile as _tempfile
     path = ADS_DIR / 'ads.json'
-    with open(path, 'w') as f:
-        json.dump(ads, f, indent=2)
+    fd, tmp = _tempfile.mkstemp(dir=str(ADS_DIR), prefix=".ads.", suffix=".tmp")
+    try:
+        with _os.fdopen(fd, 'w') as f:
+            json.dump(ads, f, indent=2)
+            f.flush()
+            _os.fsync(f.fileno())
+        _os.replace(tmp, path)
+    except Exception:
+        try:
+            _os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 
@@ -2498,6 +2529,13 @@ def authorize():
             'https://www.googleapis.com/auth/youtube.upload',
             'https://www.googleapis.com/auth/youtube.readonly',
             'https://www.googleapis.com/auth/youtube',
+            # This flow uses the sign-in OAuth client, and
+            # include_granted_scopes='true' makes Google return the identity
+            # scopes already granted at login. Declare them so the library's
+            # scope-match check passes instead of raising on the union.
+            'openid',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/userinfo.profile',
         ]
     )
     flow.redirect_uri = 'https://autoclip.cloud/oauth2callback'
@@ -2534,6 +2572,13 @@ def oauth2callback():
             'https://www.googleapis.com/auth/youtube.upload',
             'https://www.googleapis.com/auth/youtube.readonly',
             'https://www.googleapis.com/auth/youtube',
+            # This flow uses the sign-in OAuth client, and
+            # include_granted_scopes='true' makes Google return the identity
+            # scopes already granted at login. Declare them so the library's
+            # scope-match check passes instead of raising on the union.
+            'openid',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/userinfo.profile',
         ],
         state=state,
     )
