@@ -544,6 +544,40 @@ def transcribe(session_id):
         '-y', audio_path
     ], capture_output=True)
 
+    # Leading silence poisons Whisper's context for the whole chunk: it
+    # emits filler, conditions on it, and never recovers until the next
+    # chunk boundary. Detect where speech actually starts and skip to it,
+    # then offset every timestamp back so they match the source video.
+    lead_offset = 0.0
+    try:
+        _sd = subprocess.run([
+            'ffmpeg', '-i', audio_path, '-af',
+            'silencedetect=noise=-40dB:d=2', '-f', 'null', '-'
+        ], capture_output=True, text=True)
+        _lines = [l for l in _sd.stderr.splitlines() if 'silence_end' in l]
+        if _lines:
+            _first = _lines[0].split('silence_end:')[1].strip().split()[0]
+            _cand = float(_first)
+            _ss = _sd.stderr.split('silence_start:')
+            _starts_at_zero = len(_ss) > 1 and float(_ss[1].strip().split()[0]) < 1.0
+            if _starts_at_zero and 0 < _cand < 600:
+                lead_offset = max(0.0, _cand - 1.0)
+    except Exception:
+        app.logger.exception('leading-silence detect failed; using full audio')
+        lead_offset = 0.0
+    if lead_offset > 0:
+        _trimmed = str(UPLOAD_DIR / f"{session_id}_audio_trim.mp3")
+        _tr = subprocess.run([
+            'ffmpeg', '-ss', str(lead_offset), '-i', audio_path,
+            '-acodec', 'mp3', '-ab', '32k', '-ac', '1', '-ar', '16000',
+            '-y', _trimmed
+        ], capture_output=True)
+        if _tr.returncode == 0 and os.path.exists(_trimmed):
+            os.remove(audio_path)
+            audio_path = _trimmed
+            app.logger.info('trimmed %.1fs of leading silence', lead_offset)
+        else:
+            lead_offset = 0.0
     # Get audio duration in seconds
     probe = subprocess.run([
         'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
@@ -579,16 +613,27 @@ def transcribe(session_id):
             response = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
+                language="en",
+                temperature=0,
                 response_format="verbose_json",
                 timestamp_granularities=["segment"]
             )
+        _kept_text = []
         for seg in response.segments:
+            _nsp = getattr(seg, "no_speech_prob", 0.0) or 0.0
+            _alp = getattr(seg, "avg_logprob", 0.0) or 0.0
+            if _nsp > 0.6 and _alp < -0.4:
+                continue
+            _txt = seg.text.strip()
+            if not _txt:
+                continue
             all_segments.append({
-                'start': seg.start + time_offset,
-                'end': seg.end + time_offset,
-                'text': seg.text.strip()
+                'start': seg.start + time_offset + lead_offset,
+                'end': seg.end + time_offset + lead_offset,
+                'text': _txt
             })
-        full_text += response.text + " "
+            _kept_text.append(_txt)
+        full_text += " ".join(_kept_text) + " "
         os.remove(chunk_path)
 
     os.remove(audio_path)
