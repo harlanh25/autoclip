@@ -2527,34 +2527,37 @@ def generate_thumbnail():
 # ─────────────────────────────────────────
 
 def load_session(session_id):
-    path = SESSIONS_DIR / f"{session_id}.json"
-    if path.exists():
-        with open(path) as f:
-            return json.load(f)
-    return None
+    """Read session state from Postgres. Sessions moved off local disk in
+    Phase 3.5a so that multiple Cloud Run instances share one source of
+    truth; the old sessions/*.json files are no longer consulted.
+    """
+    row = autoclip_db.get_db().execute(
+        "SELECT data FROM sessions WHERE session_id=?", (session_id,)
+    ).fetchone()
+    if not row:
+        return None
+    data = row['data']
+    if isinstance(data, str):
+        data = json.loads(data)
+    return data
 
 def save_session(session_id, data):
-    """Atomic write: dump to a temp file in the same directory, fsync, then
-    os.replace() onto the target. os.replace is atomic on POSIX, so a
-    concurrent reader sees either the complete old file or the complete new
-    one, never a truncated one. Plain open(path,'w') truncates immediately
-    and leaves the session empty if the process dies mid-dump.
+    """Upsert session state into Postgres. The row write is atomic, so a
+    concurrent reader sees either the whole old value or the whole new one.
+
+    Note this does NOT make read-modify-write safe: two requests that both
+    load, mutate, and save the same session will still lose one set of
+    changes. That race exists on local disk today; it gets more likely with
+    more instances.
     """
-    import os as _os, tempfile as _tempfile
-    path = SESSIONS_DIR / f"{session_id}.json"
-    fd, tmp = _tempfile.mkstemp(dir=str(SESSIONS_DIR), prefix=f".{session_id}.", suffix=".tmp")
-    try:
-        with _os.fdopen(fd, 'w') as f:
-            json.dump(data, f, indent=2)
-            f.flush()
-            _os.fsync(f.fileno())
-        _os.replace(tmp, path)
-    except Exception:
-        try:
-            _os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+    db = autoclip_db.get_db()
+    db.execute(
+        "INSERT INTO sessions (session_id, data) VALUES (?, ?::jsonb) "
+        "ON CONFLICT (session_id) DO UPDATE SET data=EXCLUDED.data, "
+        "updated_at=CURRENT_TIMESTAMP",
+        (session_id, json.dumps(data))
+    )
+    db.commit()
 
 def load_ads():
     path = ADS_DIR / 'ads.json'
