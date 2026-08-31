@@ -1543,11 +1543,9 @@ def _finish_publish_job(job_id):
             ).fetchone()
             if not ch:
                 raise RuntimeError(f'Channel {yt_channel_id} not found')
-            token_path = _os_v42y.path.join(_os_v42y.path.dirname(_os_v42y.path.abspath(__file__)), ch['token_path'])
-            if not _os_v42y.path.exists(token_path):
-                raise RuntimeError(f'Token file missing: {token_path}')
-            with open(token_path) as _f:
-                token_data = _json_v42y.load(_f)
+            token_data = load_channel_token(yt_channel_id)
+            if not token_data:
+                raise RuntimeError(f'No stored token for channel {yt_channel_id}')
             creds = google.oauth2.credentials.Credentials(
                 token=token_data.get('token'),
                 refresh_token=token_data.get('refresh_token'),
@@ -1559,8 +1557,7 @@ def _finish_publish_job(job_id):
             if not creds.valid:
                 creds.refresh(google.auth.transport.requests.Request())
                 token_data['token'] = creds.token
-                with open(token_path, 'w') as _f:
-                    _json_v42y.dump(token_data, _f)
+                save_channel_token(yt_channel_id, token_data)
 
             yt = googleapiclient.discovery.build('youtube', 'v3', credentials=creds)
 
@@ -2526,6 +2523,37 @@ def generate_thumbnail():
 #  HELPERS
 # ─────────────────────────────────────────
 
+def load_channel_token(yt_channel_id):
+    """Read a channel's OAuth token from channels.token_data.
+
+    Tokens moved off local disk in Phase 3.5c: they are per-tenant data
+    with a lifecycle tied to channel connect/disconnect, so they live in
+    the row they belong to rather than in credentials/tokens/*.json.
+    Returns None when the channel has never been connected.
+    """
+    row = autoclip_db.get_db().execute(
+        "SELECT token_data FROM channels WHERE youtube_channel_id=?",
+        (yt_channel_id,)
+    ).fetchone()
+    if not row or not row['token_data']:
+        return None
+    data = row['token_data']
+    if isinstance(data, str):
+        data = json.loads(data)
+    return data
+
+def save_channel_token(yt_channel_id, data):
+    """Persist a channel's OAuth token. Called on connect and after every
+    refresh, so the stored access token stays current.
+    """
+    db = autoclip_db.get_db()
+    db.execute(
+        "UPDATE channels SET token_data=?::jsonb, updated_at=CURRENT_TIMESTAMP "
+        "WHERE youtube_channel_id=?",
+        (json.dumps(data), yt_channel_id)
+    )
+    db.commit()
+
 def load_session(session_id):
     """Read session state from Postgres. Sessions moved off local disk in
     Phase 3.5a so that multiple Cloud Run instances share one source of
@@ -2728,6 +2756,10 @@ def oauth2callback():
     else:
         ch_row = autoclip_db.create_channel(channel_id, title, handle, token_path_rel, owner_user_id=user['id'], long_uploads=long_uploads)
         autoclip_db.grant_channel_access(user['id'], ch_row['id'], 'owner')
+    # Phase 3.5c: token of record is channels.token_data. Written after the
+    # row exists so this covers both the update and the create branch. The
+    # file above is still written as a rollback and is not read anymore.
+    save_channel_token(channel_id, json.loads(creds.to_json()))
 
     return redirect(url_for('channels_page'))
 
@@ -4991,13 +5023,11 @@ def list_youtube_playlists(channel_pk):
     if user['role'] != 'admin' and not autoclip_db.user_has_channel_access(user['id'], ch['id']):
         return jsonify({'error': 'no access to this channel'}), 403
 
-    token_path = BASE_DIR / 'credentials' / 'tokens' / f"{ch['youtube_channel_id']}.json"
-    if not token_path.exists():
+    creds_data = load_channel_token(ch['youtube_channel_id'])
+    if not creds_data:
         return jsonify({'error': 'no token for this channel', 'playlists': []}), 400
 
     try:
-        with open(token_path) as f:
-            creds_data = json.load(f)
         creds = Credentials(
             token=creds_data['token'],
             refresh_token=creds_data.get('refresh_token'),
