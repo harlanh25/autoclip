@@ -428,18 +428,20 @@
   }
 
   function formatTime(seconds) {
-    seconds = Math.max(0, Math.floor(seconds || 0));
+    seconds = Math.max(0, Math.round((seconds || 0) * 10) / 10);
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
+    const whole = Math.floor(s), tenth = Math.round((s - whole) * 10);
     const p = (n) => n.toString().padStart(2, '0');
-    return h > 0 ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
+    const ss = `${p(whole)}.${tenth}`;
+    return h > 0 ? `${p(h)}:${p(m)}:${ss}` : `${p(m)}:${ss}`;
   }
 
   // Mirror of clips.html displayToSeconds - accepts ss, mm:ss, or hh:mm:ss
   function displayToSeconds(str) {
     if (typeof str !== 'string') return 0;
-    const parts = str.trim().split(':').map(p => parseInt(p, 10) || 0);
+    const parts = str.trim().split(':').map(p => parseFloat(p) || 0);
     if (parts.length === 1) return parts[0];
     if (parts.length === 2) return parts[0] * 60 + parts[1];
     if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];

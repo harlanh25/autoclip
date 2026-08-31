@@ -195,6 +195,8 @@
               <input type="text" class="ts-input" id="start-{{ idx }}" value="" data-seconds="{{ (seg.start_time or seg.start or 0) | float }}">
               <button class="nudge-btn" onclick="nudge('start-{{ idx }}', -30)">-30s</button>
               <button class="nudge-btn" onclick="nudge('start-{{ idx }}', -5)">-5s</button>
+              <button class="nudge-btn" onclick="nudge('start-{{ idx }}', -0.1)">-0.1</button>
+              <button class="nudge-btn" onclick="nudge('start-{{ idx }}', 0.1)">+0.1</button>
               <button class="nudge-btn" onclick="nudge('start-{{ idx }}', 5)">+5s</button>
               <button class="nudge-btn" onclick="nudge('start-{{ idx }}', 30)">+30s</button>
             </div>
@@ -203,6 +205,8 @@
               <input type="text" class="ts-input" id="end-{{ idx }}" value="" data-seconds="{{ (seg.end_time or seg.end or 0) | float }}">
               <button class="nudge-btn" onclick="nudge('end-{{ idx }}', -30)">-30s</button>
               <button class="nudge-btn" onclick="nudge('end-{{ idx }}', -5)">-5s</button>
+              <button class="nudge-btn" onclick="nudge('end-{{ idx }}', -0.1)">-0.1</button>
+              <button class="nudge-btn" onclick="nudge('end-{{ idx }}', 0.1)">+0.1</button>
               <button class="nudge-btn" onclick="nudge('end-{{ idx }}', 5)">+5s</button>
               <button class="nudge-btn" onclick="nudge('end-{{ idx }}', 30)">+30s</button>
               <span class="duration" id="duration-{{ idx }}"></span>
@@ -493,11 +497,14 @@
   }
 
   function secondsToDisplay(sec) {
-    // Format as MM:SS if < 1 hour, else HH:MM:SS
-    sec = Math.max(0, Math.round(sec));
-    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    return `${m}:${String(s).padStart(2,'0')}`;
+    // Format as MM:SS.d if < 1 hour, else HH:MM:SS.d (tenths retained)
+    sec = Math.max(0, Math.round((sec || 0) * 10) / 10);
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    const whole = Math.floor(s), tenth = Math.round((s - whole) * 10);
+    const ss = `${String(whole).padStart(2,'0')}.${tenth}`;
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${ss}`;
+    return `${m}:${ss}`;
   }
 
   function displayToSeconds(str) {
@@ -505,7 +512,7 @@
     if (!str) return 0;
     str = String(str).trim();
     if (!str.includes(':')) return parseFloat(str) || 0;
-    const parts = str.split(':').map(p => parseInt(p, 10) || 0);
+    const parts = str.split(':').map(p => parseFloat(p) || 0);
     if (parts.length === 2) return parts[0] * 60 + parts[1];
     if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
     return 0;
@@ -540,7 +547,7 @@
   function nudge(elId, delta) {
     const el = document.getElementById(elId);
     const current = getSeconds(el);
-    const next = Math.max(0, current + delta);
+    const next = Math.max(0, Math.round((current + delta) * 10) / 10);
     el.value = secondsToDisplay(next);
     el.dispatchEvent(new Event('input'));
   }
