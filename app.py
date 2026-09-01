@@ -532,13 +532,13 @@ def transcribe(session_id):
     if not session:
         return jsonify({'error': 'Session not found'}), 404
 
-    if 'gcs_key' in session:
-        ext = Path(session['gcs_key']).suffix or '.mp4'
-        video_path = str(UPLOAD_DIR / f"{session_id}{ext}")
-        if not Path(video_path).exists():
-            gcs_helper.download_file(session['gcs_key'], video_path)
-    else:
-        video_path = session['video_path']
+    # Phase 3.5b: stream the source instead of downloading it. On Cloud Run
+    # UPLOAD_DIR is tmpfs, so pulling a multi-GB source into it counts against
+    # the instance memory limit and OOMs. ffmpeg reads the signed URL over
+    # HTTPS and writes only the extracted audio. Transcription needs the whole
+    # audio track, so this does not reduce bytes transferred - it removes the
+    # local copy, which is what actually breaks.
+    video_path = get_video_input(session)
 
     # Extract audio using ffmpeg - low bitrate mono to minimize file size
     audio_path = str(UPLOAD_DIR / f"{session_id}_audio.mp3")
