@@ -44,9 +44,20 @@ TOKENS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _load_client_config():
-    """Load OAuth client config JSON downloaded from Google Cloud Console."""
-    with open(SIGNIN_CLIENT_FILE) as f:
-        data = json.load(f)
+    """Load OAuth client config JSON downloaded from Google Cloud Console.
+
+    Prefers the AUTOCLIP_SIGNIN_CLIENT env var (JSON, from Secret Manager)
+    so the container needs no credentials/ directory. Falls back to the
+    file on the VM, which has no such env var set. The file branch goes
+    away with the VM.
+    """
+    import os as _os
+    _raw = _os.environ.get('AUTOCLIP_SIGNIN_CLIENT')
+    if _raw:
+        data = json.loads(_raw)
+    else:
+        with open(SIGNIN_CLIENT_FILE) as f:
+            data = json.load(f)
     # Google gives either 'web' or 'installed' shape; we want 'web'
     return data.get('web') or data.get('installed') or data
 
