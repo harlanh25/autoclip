@@ -2657,6 +2657,19 @@ def save_ads(ads):
 CREDENTIALS_DIR = BASE_DIR / 'credentials'
 CLIENT_SECRET    = CREDENTIALS_DIR / 'power2_client_secret.json'
 TOKEN_FILE       = CREDENTIALS_DIR / 'power2_token.json'
+def _oauth_redirect_uri():
+    """The OAuth callback URL for whichever host is serving this request.
+
+    /authorize and /oauth2callback must produce the identical string or
+    Google rejects the callback, so both call this. Every value it can
+    return must also be registered on the OAuth client in the console.
+    """
+    base = _os_v42.environ.get('PUBLIC_BASE_URL', '').rstrip('/')
+    if not base:
+        base = request.url_root.rstrip('/').replace('http://', 'https://', 1)
+    return base + '/oauth2callback'
+
+
 OAUTH_REDIRECT   = 'https://autoclip.cloud/oauth2callback'
 
 YOUTUBE_SCOPES = [
@@ -2690,7 +2703,7 @@ def authorize():
             'https://www.googleapis.com/auth/userinfo.profile',
         ]
     )
-    flow.redirect_uri = 'https://autoclip.cloud/oauth2callback'
+    flow.redirect_uri = _oauth_redirect_uri()
 
     auth_url, state = flow.authorization_url(
         access_type='offline',
@@ -2733,7 +2746,7 @@ def oauth2callback():
         ],
         state=state,
     )
-    flow.redirect_uri = 'https://autoclip.cloud/oauth2callback'
+    flow.redirect_uri = _oauth_redirect_uri()
 
     saved_verifier = flask_session.pop('yt_oauth_code_verifier', None)
     if saved_verifier:
