@@ -39,6 +39,23 @@
   .channel-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; }
   .channel-meta { color: var(--muted); font-size: 0.8rem; margin-bottom: 1rem; }
   .channel-meta strong { color: var(--text); }
+  .disconnect-row { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+  .disconnect-btn { background: transparent; border: 1px solid #7f1d1d; color: #f87171;
+    padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; }
+  .disconnect-btn:hover { background: #7f1d1d; color: #fff; }
+  .disconnect-btn:disabled { opacity: 0.5; cursor: default; }
+  .disc-note { color: var(--muted); font-size: 0.8rem; }
+  .reconnect-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent-light);
+    padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600;
+    text-decoration: none; display: inline-block; }
+  .reconnect-btn:hover { background: var(--accent); color: #fff; }
+  .delete-btn { background: #7f1d1d; border: 1px solid #7f1d1d; color: #fff;
+    padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; }
+  .delete-btn:hover { background: #991b1b; }
+  .delete-btn:disabled { opacity: 0.5; cursor: default; }
   .badges { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
   .badge { font-size: 0.7rem; font-weight: 700; padding: 0.25rem 0.6rem; border-radius: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
   .badge-owner { background: rgba(37,99,235,0.15); color: var(--accent-light); }
@@ -159,6 +176,24 @@
           <span class="desc-status" id="thumb-status-{{ ch.id }}"></span>
         </div>
       </div>
+      {% if ch.user_role == 'owner' or (current_user and current_user.role == 'admin') %}
+      <div class="disconnect-row">
+        {% if ch.disconnected_at %}
+          <a href="/authorize" class="reconnect-btn">Reconnect channel</a>
+          {% if current_user and current_user.role == 'admin' %}
+          <button class="delete-btn" type="button"
+                  onclick="deleteChannel({{ ch.id }}, this)"
+                  data-title="{{ ch.title }}">Delete permanently</button>
+          {% endif %}
+          <span class="disc-note">Disconnected — AutoClip has no access.</span>
+        {% else %}
+          <button class="disconnect-btn" type="button"
+                  onclick="disconnectChannel({{ ch.id }}, this)"
+                  data-title="{{ ch.title }}">Disconnect channel</button>
+        {% endif %}
+        <span class="desc-status" id="disc-status-{{ ch.id }}"></span>
+      </div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
@@ -308,6 +343,51 @@
       status.style.color = '#f87171';
     }
   }
+
+async function disconnectChannel(chId, btn) {
+  const title = btn.getAttribute('data-title') || 'this channel';
+  if (!confirm('Disconnect ' + title + '?\n\n' +
+               'AutoClip will lose access to the channel and any scheduled ' +
+               'podcast syncs will stop. Your clips, thumbnails and ad library ' +
+               'are kept. You can reconnect at any time.')) return;
+  const st = document.getElementById('disc-status-' + chId);
+  btn.disabled = true;
+  if (st) st.textContent = 'Disconnecting...';
+  try {
+    const r = await fetch('/api/channels/' + chId + '/disconnect', {method: 'POST'});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+    if (st) st.textContent = 'Disconnected.';
+    setTimeout(function(){ location.reload(); }, 800);
+  } catch (e) {
+    btn.disabled = false;
+    if (st) st.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function deleteChannel(chId, btn) {
+  const title = btn.getAttribute('data-title') || 'this channel';
+  if (!confirm('PERMANENTLY DELETE ' + title + '?\n\n' +
+      'This cannot be undone. It removes the channel, its thumbnails, ' +
+      'ad library, ad settings, user access, and all podcast sync ' +
+      'configurations and sync history.\n\n' +
+      'If the channel is reconnected later and a sync is recreated for the ' +
+      'same playlist, previously published episodes may publish again.')) return;
+  if (!confirm('Last check: type-free confirmation.\n\nDelete ' + title + ' permanently?')) return;
+  const st = document.getElementById('disc-status-' + chId);
+  btn.disabled = true;
+  if (st) st.textContent = 'Deleting...';
+  try {
+    const r = await fetch('/api/channels/' + chId + '/delete', {method: 'POST'});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+    if (st) st.textContent = 'Deleted.';
+    setTimeout(function(){ location.reload(); }, 800);
+  } catch (e) {
+    btn.disabled = false;
+    if (st) st.textContent = 'Error: ' + e.message;
+  }
+}
 </script>
 {% include '_footer.html' %}
 </body>

@@ -2776,7 +2776,7 @@ def oauth2callback():
     existing = autoclip_db.get_channel_by_youtube_id(channel_id)
     if existing:
         autoclip_db.get_db().execute(
-            "UPDATE channels SET title=?, handle=?, token_path=?, long_uploads_enabled=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            "UPDATE channels SET title=?, handle=?, token_path=?, long_uploads_enabled=?, disconnected_at=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?",
             (title, handle, token_path_rel, 1 if long_uploads else 0, existing['id'])
         )
         autoclip_db.get_db().commit()
@@ -2850,6 +2850,93 @@ def serve_clip(filename):
 # ============================================================================
 # Multi-tenant routes
 # ============================================================================
+
+@app.route('/api/channels/<int:channel_id>/disconnect', methods=['POST'])
+def disconnect_channel(channel_id):
+    """Owner-only. Revoke Google access and stop all activity for a channel.
+
+    Does not delete the channel row, thumbnails, ads, or publish history -
+    clips age out via the normal retention cycle, so reconnecting within
+    that window restores the channel intact.
+    """
+    import requests as _rq
+    user = autoclip_auth.get_current_user()
+    if not user:
+        return jsonify({'error': 'Not signed in'}), 401
+    _is_admin = user.get('role') == 'admin'
+    if not _is_admin and not autoclip_db.user_is_channel_owner(user['id'], channel_id):
+        return jsonify({'error': 'Only the channel owner or an admin can disconnect it.'}), 403
+
+    row = autoclip_db.get_db().execute(
+        "SELECT youtube_channel_id, title FROM channels WHERE id=?", (channel_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({'error': 'Channel not found'}), 404
+    yt_id = row['youtube_channel_id']
+
+    # 1. Revoke at Google. Best effort - an already-invalid token still
+    #    needs the local cleanup below to run.
+    tok_path = BASE_DIR / 'credentials' / 'tokens' / ('%s.json' % yt_id)
+    revoked = False
+    if tok_path.exists():
+        try:
+            with open(tok_path) as f:
+                _t = json.load(f)
+            _secret = _t.get('refresh_token') or _t.get('token')
+            if _secret:
+                _resp = _rq.post('https://oauth2.googleapis.com/revoke',
+                                 params={'token': _secret},
+                                 headers={'content-type': 'application/x-www-form-urlencoded'},
+                                 timeout=10)
+                revoked = _resp.status_code == 200
+        except Exception:
+            app.logger.exception('revoke failed for channel %s', channel_id)
+
+    # 2. Remove the local token
+    try:
+        if tok_path.exists():
+            tok_path.unlink()
+    except Exception:
+        app.logger.exception('token unlink failed for channel %s', channel_id)
+
+    # 3+4. Deactivate syncs and flag the channel, in one commit
+    autoclip_db.mark_channel_disconnected(channel_id)
+    app.logger.info('channel %s (%s) disconnected by user %s, revoked=%s',
+                    channel_id, row['title'], user['id'], revoked)
+    return jsonify({'status': 'disconnected', 'revoked_at_google': revoked})
+
+
+@app.route('/api/channels/<int:channel_id>/delete', methods=['POST'])
+def delete_channel(channel_id):
+    """Admin-only, permanent. Requires the channel to be disconnected first.
+
+    Deletes the channel row; FK cascades remove thumbnails_library, ads,
+    channel_ad_config and user_channels. Sync configs are deleted
+    explicitly first - their channel_id is ON DELETE SET NULL, so they
+    would otherwise survive with a live playlist and API key.
+    """
+    user = autoclip_auth.get_current_user()
+    if not user:
+        return jsonify({'error': 'Not signed in'}), 401
+    if user.get('role') != 'admin':
+        return jsonify({'error': 'Admin only.'}), 403
+
+    db = autoclip_db.get_db()
+    row = db.execute(
+        "SELECT title, disconnected_at FROM channels WHERE id=?", (channel_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({'error': 'Channel not found'}), 404
+    if not row['disconnected_at']:
+        return jsonify({'error': 'Disconnect the channel before deleting it.'}), 400
+
+    db.execute("DELETE FROM audio_sync_configs WHERE channel_id=?", (channel_id,))
+    db.execute("DELETE FROM channels WHERE id=?", (channel_id,))
+    db.commit()
+    app.logger.warning('channel %s (%s) PERMANENTLY DELETED by admin %s',
+                       channel_id, row['title'], user['id'])
+    return jsonify({'status': 'deleted'})
+
 
 @app.route('/channels')
 def channels_page():

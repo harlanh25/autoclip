@@ -220,6 +220,35 @@ def list_channels_for_user(user_id):
     return [dict(r) for r in rows]
 
 
+def user_is_channel_owner(user_id, channel_id):
+    """True only if the user holds the 'owner' role on this channel."""
+    row = get_db().execute(
+        "SELECT 1 FROM user_channels WHERE user_id=? AND channel_id=? AND role='owner'",
+        (user_id, channel_id)
+    ).fetchone()
+    return row is not None
+
+
+def mark_channel_disconnected(channel_id):
+    """Flag the channel disconnected and deactivate its sync configs.
+
+    Deactivating the configs is required: podcast_sync_worker does not
+    check channel state, so an active config would keep publishing.
+    """
+    db = get_db()
+    db.execute(
+        "UPDATE audio_sync_configs SET is_active=0, updated_at=CURRENT_TIMESTAMP "
+        "WHERE channel_id=?",
+        (channel_id,)
+    )
+    db.execute(
+        "UPDATE channels SET disconnected_at=CURRENT_TIMESTAMP, "
+        "token_data=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (channel_id,)
+    )
+    db.commit()
+
+
 def user_has_channel_access(user_id, channel_id):
     """True if the user has any access to this channel."""
     row = get_db().execute(
