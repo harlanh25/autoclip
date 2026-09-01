@@ -54,6 +54,21 @@ def _load_client_config():
 SIGNIN_SCOPES = ["openid", "email", "profile"]
 SIGNIN_AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth"
 SIGNIN_TOKEN_URI = "https://oauth2.googleapis.com/token"
+def _signin_redirect_uri():
+    """Sign-in callback URL for whichever host is serving this request.
+
+    The authorize step and the callback step must send Google the same
+    string or the token exchange is rejected, so both call this. Every
+    value it can return must be a registered redirect URI on the OAuth
+    client.
+    """
+    import os as _os
+    base = _os.environ.get('PUBLIC_BASE_URL', '').rstrip('/')
+    if not base:
+        base = request.url_root.rstrip('/').replace('http://', 'https://', 1)
+    return base + '/auth/google/callback'
+
+
 SIGNIN_REDIRECT_URI = "https://autoclip.cloud/auth/google/callback"
 
 
@@ -82,7 +97,7 @@ def login_google():
 
     params = {
         'client_id': cfg['client_id'],
-        'redirect_uri': SIGNIN_REDIRECT_URI,
+        'redirect_uri': _signin_redirect_uri(),
         'response_type': 'code',
         'scope': ' '.join(SIGNIN_SCOPES),
         'access_type': 'online',
@@ -114,7 +129,7 @@ def google_callback():
         'code': code,
         'client_id': cfg['client_id'],
         'client_secret': cfg['client_secret'],
-        'redirect_uri': SIGNIN_REDIRECT_URI,
+        'redirect_uri': _signin_redirect_uri(),
         'grant_type': 'authorization_code',
     })
     if not token_resp.ok:
