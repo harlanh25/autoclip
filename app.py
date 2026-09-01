@@ -49,7 +49,7 @@ app.register_blueprint(autoclip_auth.bp)
 
 
 PUBLIC_PATH_PREFIXES = ('/static/', '/login', '/logout', '/auth/', '/pending-approval')
-PUBLIC_EXACT_PATHS = {'/', '/pricing'}
+PUBLIC_EXACT_PATHS = {'/', '/pricing', '/privacy'}
 
 @app.before_request
 def _enforce_auth_globally():
@@ -243,6 +243,12 @@ def landing():
     if user and user['is_approved']:
         return redirect(url_for('dashboard'))
     return render_template('landing.html')
+
+@app.route('/privacy')
+def privacy():
+    """Public privacy policy. Required for Google OAuth verification."""
+    return render_template('privacy.html')
+
 
 @app.route('/dashboard')
 def dashboard():

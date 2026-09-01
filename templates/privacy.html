@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — AutoClip</title>
+<link rel="icon" type="image/png" href="/static/img/autoclip_mark.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #2563eb;
+    --accent-light: #3b82f6;
+    --accent-dark: #1d4ed8;
+    --bg: #07070f;
+    --bg2: #0e0e1a;
+    --bg3: #14141f;
+    --border: #1e1e2e;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  nav {
+    background: rgba(7,7,15,0.85); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border); padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px; position: sticky; top: 0; z-index: 100;
+  }
+  .brand { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; }
+  .brand img { height: 28px; width: 28px; }
+  .brand-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+  .brand-text .accent { color: var(--accent-light); }
+  .nav-right { display: flex; align-items: center; gap: 1rem; }
+  .btn-nav { padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; font-weight: 600; text-decoration: none; transition: background 0.2s; }
+  .btn-nav-secondary { color: var(--muted); }
+  .btn-nav-secondary:hover { color: var(--text); }
+  .btn-nav-primary { background: var(--accent); color: #fff; }
+  .btn-nav-primary:hover { background: var(--accent-light); }
+
+  .doc { max-width: 780px; margin: 4rem auto 6rem; padding: 0 2rem; }
+  .doc h1 { font-size: clamp(2rem, 5vw, 2.75rem); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+  .doc .updated { color: var(--muted); font-size: 0.9rem; margin-bottom: 2.5rem; }
+  .doc h2 { font-size: 1.25rem; font-weight: 700; margin: 2.5rem 0 0.875rem; letter-spacing: -0.01em; }
+  .doc h2 .num { color: var(--accent-light); margin-right: 0.5rem; }
+  .doc h3 { font-size: 1rem; font-weight: 700; margin: 1.5rem 0 0.5rem; }
+  .doc p { color: var(--muted); line-height: 1.75; margin-bottom: 1rem; }
+  .doc strong { color: var(--text); font-weight: 600; }
+  .doc a { color: var(--accent-light); text-decoration: none; }
+  .doc a:hover { text-decoration: underline; }
+  .doc ul { color: var(--muted); line-height: 1.75; margin: 0 0 1rem 1.25rem; }
+  .doc li { margin-bottom: 0.5rem; }
+  .doc table { width: 100%; border-collapse: collapse; margin: 1.25rem 0 1.5rem; font-size: 0.9rem; }
+  .doc th { text-align: left; padding: 0.75rem; background: var(--bg2); border: 1px solid var(--border); font-weight: 600; color: var(--text); }
+  .doc td { padding: 0.75rem; border: 1px solid var(--border); color: var(--muted); line-height: 1.6; vertical-align: top; }
+  .doc td code { font-size: 0.82rem; color: var(--accent-light); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .callout { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+  .callout p:last-child { margin-bottom: 0; }
+  footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--muted); font-size: 0.875rem; }
+  footer a { color: var(--muted); text-decoration: none; margin: 0 0.75rem; }
+  footer a:hover { color: var(--text); }
+  @media (max-width: 640px) {
+    nav { padding: 0 1rem; }
+    .doc { padding: 0 1.25rem; margin-top: 2.5rem; }
+    .doc table { font-size: 0.82rem; }
+    .doc th, .doc td { padding: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="brand">
+    <img src="/static/img/autoclip_mark.png" alt="AutoClip">
+    <span class="brand-text">Auto<span class="accent">Clip</span></span>
+  </a>
+  <div class="nav-right">
+    <a href="/pricing" class="btn-nav btn-nav-secondary">Pricing</a>
+    <a href="/login" class="btn-nav btn-nav-primary">Sign In</a>
+  </div>
+</nav>
+
+<div class="doc">
+
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: August 31, 2026</p>
+
+  <p>AutoClip is operated by <strong>AUTO CLIP LLC</strong>, a Florida limited liability company. AutoClip is a content production platform at autoclip.cloud that helps podcast and video creators turn long-form video into short clips and podcast episodes, and publish them to the creator's own channels and podcast hosts.</p>
+
+  <p>This policy explains what information we collect, how we use it, who we share it with, and how you can remove it. It covers our handling of data obtained through Google APIs, including YouTube.</p>
+
+  <h2><span class="num">1.</span>Information you give us</h2>
+  <ul>
+    <li><strong>Account information.</strong> Your name and email address, provided when you sign in with Google.</li>
+    <li><strong>Billing information.</strong> Handled by Stripe. We receive a customer identifier and subscription status. We never receive or store your card number.</li>
+    <li><strong>Content you upload.</strong> Video and audio files you upload for processing, and the ads, thumbnails, and artwork you add.</li>
+    <li><strong>Configuration.</strong> The channels, playlists, and podcast destinations you connect, and the settings you choose for each.</li>
+  </ul>
+
+  <h2><span class="num">2.</span>Google and YouTube data we access</h2>
+
+  <p>You connect a YouTube channel to AutoClip through Google's OAuth consent screen. That screen shows exactly what you are granting, and nothing happens without your approval. We access the following, and only the following:</p>
+
+  <table>
+    <thead>
+      <tr><th>What</th><th>Why</th><th>Google scope</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Uploading video to your channel, and setting the thumbnail</td>
+        <td>To publish the clips you have reviewed and approved</td>
+        <td><code>youtube.upload</code></td>
+      </tr>
+      <tr>
+        <td>Your channel's name, ID, and thumbnail</td>
+        <td>To show you which channel you are publishing to</td>
+        <td><code>youtube.readonly</code></td>
+      </tr>
+      <tr>
+        <td>Video and playlist metadata — titles, descriptions, video IDs, publish dates</td>
+        <td>To detect new episodes on a playlist you nominate, and to keep clip titles and descriptions consistent with the source show</td>
+        <td><code>youtube.readonly</code></td>
+      </tr>
+      <tr>
+        <td>Audio from videos on a playlist you have nominated</td>
+        <td>To produce the podcast episode you asked us to produce</td>
+        <td><code>youtube.readonly</code></td>
+      </tr>
+      <tr>
+        <td>Adding a published clip to a playlist on your channel</td>
+        <td>To file each clip into the playlist you designated during setup</td>
+        <td><code>youtube</code></td>
+      </tr>
+      <tr>
+        <td>Your name and email address</td>
+        <td>To create and identify your AutoClip account</td>
+        <td><code>openid</code>, <code>userinfo.email</code>, <code>userinfo.profile</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>We do not</strong> read, modify, or delete videos on your channel that AutoClip did not create. <strong>We do not</strong> access your comments, subscribers, analytics, or private messages. <strong>We do not</strong> access any Google account data beyond what is listed above.</p>
+
+  <p><strong>Nothing publishes automatically without your configuration.</strong> Clips publish when you approve them. The podcast sync publishes on a schedule only for the specific playlists you have set up and enabled, and you can disable any of them at any time.</p>
+
+  <h2><span class="num">3.</span>Your Google credentials</h2>
+
+  <p>When you connect a channel, Google issues AutoClip an access token and a refresh token. These are stored encrypted at rest in our managed Google Cloud SQL database and used only to perform the actions described in section 2 on your behalf.</p>
+
+  <p>We never share your tokens with anyone, and we never use them for any purpose other than delivering the features you have configured.</p>
+
+  <p>You can revoke AutoClip's access at any time from your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account permissions page</a>, or by disconnecting the channel inside AutoClip. Disconnecting in AutoClip deletes the stored tokens for that channel.</p>
+
+  <h2><span class="num">4.</span>Service providers</h2>
+
+  <p>We use a small number of processors. Each receives only what it needs.</p>
+
+  <table>
+    <thead>
+      <tr><th>Provider</th><th>What it receives</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Google Cloud Platform</td><td>All stored data</td><td>Hosting, database, file storage</td></tr>
+      <tr><td>OpenAI</td><td>Audio extracted from your videos</td><td>Speech-to-text transcription</td></tr>
+      <tr><td>Anthropic</td><td>Transcript text from your videos</td><td>Identifying which segments are worth clipping</td></tr>
+      <tr><td>Stripe</td><td>Billing identifiers</td><td>Payments and subscriptions</td></tr>
+      <tr><td>Transistor, Buzzsprout, Spreaker</td><td>The episode audio and metadata for the destination you chose</td><td>Publishing your podcast episodes</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <h3>About AI processing</h3>
+    <p>AutoClip uses third-party AI services to transcribe your audio and to identify clip-worthy segments. This processing happens <strong>only to produce the output you requested</strong>. Your content and any data obtained from Google APIs are <strong>not used to train or improve any AI model</strong>, by us or by our providers. Our agreements with these providers prohibit it.</p>
+  </div>
+
+  <p>We do not sell your data. We do not share it with advertisers, data brokers, or analytics companies. We do not transfer Google user data to third parties except as listed in this section, and only to deliver the features you have asked for.</p>
+
+  <h2><span class="num">5.</span>Limited use of Google user data</h2>
+
+  <p>AutoClip's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+
+  <h2><span class="num">6.</span>How long we keep things</h2>
+  <ul>
+    <li><strong>Generated clips and thumbnails</strong> — deleted 30 days after creation.</li>
+    <li><strong>Source video you upload</strong> — retained while the editing session is active, then deleted.</li>
+    <li><strong>Transcripts and editing sessions</strong> — deleted 30 days after last activity.</li>
+    <li><strong>Channel connections and OAuth tokens</strong> — until you disconnect the channel or delete your account.</li>
+    <li><strong>Publishing history</strong> (which episodes synced, and when) — retained while your account is active, so we do not republish the same episode twice.</li>
+    <li><strong>Account and billing records</strong> — retained as required for tax and accounting.</li>
+  </ul>
+
+  <p>Content already published to your YouTube channel or podcast host lives on those platforms and is governed by their terms. Deleting your AutoClip account does not remove anything already published — you control that on the destination platform.</p>
+
+  <h2><span class="num">7.</span>Deleting your data</h2>
+  <ul>
+    <li><strong>One channel:</strong> disconnect it in AutoClip. Its tokens and configuration are deleted.</li>
+    <li><strong>Everything:</strong> email <a href="mailto:support@autoclip.cloud">support@autoclip.cloud</a> and we will delete your account and associated data within 30 days.</li>
+    <li><strong>Revoke access without contacting us:</strong> <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a></li>
+  </ul>
+
+  <h2><span class="num">8.</span>Security</h2>
+
+  <p>Data is stored in Google Cloud Platform. Traffic is encrypted in transit with TLS. Stored data, including OAuth tokens, is encrypted at rest. Access to production systems is limited to personnel who need it.</p>
+
+  <p>No system is perfectly secure, and we do not claim otherwise. If a breach affects your data, we will notify you.</p>
+
+  <h2><span class="num">9.</span>Children</h2>
+
+  <p>AutoClip is a business tool and is not directed to anyone under 18. We do not knowingly collect information from children.</p>
+
+  <h2><span class="num">10.</span>Changes to this policy</h2>
+
+  <p>If we change this policy in a way that affects how we handle your data, we will update the date above and notify account holders by email before the change takes effect.</p>
+
+  <h2><span class="num">11.</span>Contact</h2>
+
+  <p>
+    AUTO CLIP LLC<br>
+    1324 Waterwood Dr<br>
+    Lutz, FL 33559<br>
+    <a href="mailto:support@autoclip.cloud">support@autoclip.cloud</a>
+  </p>
+
+</div>
+
+<footer>
+  <a href="/">Home</a>
+  <a href="/pricing">Pricing</a>
+  <a href="/privacy">Privacy</a>
+  <div style="margin-top:1rem;">&copy; 2026 AUTO CLIP LLC</div>
+</footer>
+
+</body>
+</html>
