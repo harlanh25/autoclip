@@ -145,7 +145,7 @@
 
   <h2><span class="num">3.</span>Your Google credentials</h2>
 
-  <p>When you connect a channel, Google issues AutoClip an access token and a refresh token. These are stored encrypted at rest in our managed Google Cloud SQL database and used only to perform the actions described in section 2 on your behalf.</p>
+  <p>When you connect a channel, Google issues AutoClip an access token and a refresh token. These are stored encrypted at rest on our infrastructure in Google Cloud Platform, and are used only to perform the actions described in section 2 on your behalf.</p>
 
   <p>We never share your tokens with anyone, and we never use them for any purpose other than delivering the features you have configured.</p>
 
@@ -181,9 +181,9 @@
 
   <h2><span class="num">6.</span>How long we keep things</h2>
   <ul>
-    <li><strong>Generated clips and thumbnails</strong> — deleted 30 days after creation.</li>
+    <li><strong>Generated clips and thumbnails</strong> — retained while your account is active. You can delete them at any time.</li>
     <li><strong>Source video you upload</strong> — retained while the editing session is active, then deleted.</li>
-    <li><strong>Transcripts and editing sessions</strong> — deleted 30 days after last activity.</li>
+    <li><strong>Transcripts and editing sessions</strong> — retained while your account is active.</li>
     <li><strong>Channel connections and OAuth tokens</strong> — until you disconnect the channel or delete your account.</li>
     <li><strong>Publishing history</strong> (which episodes synced, and when) — retained while your account is active, so we do not republish the same episode twice.</li>
     <li><strong>Account and billing records</strong> — retained as required for tax and accounting.</li>
@@ -193,7 +193,7 @@
 
   <h2><span class="num">7.</span>Deleting your data</h2>
   <ul>
-    <li><strong>One channel:</strong> disconnect it in AutoClip. Its tokens and configuration are deleted.</li>
+    <li><strong>One channel:</strong> revoke AutoClip's access from your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account permissions page</a>, or email us to have the channel removed.</li>
     <li><strong>Everything:</strong> email <a href="mailto:support@autoclip.cloud">support@autoclip.cloud</a> and we will delete your account and associated data within 30 days.</li>
     <li><strong>Revoke access without contacting us:</strong> <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a></li>
   </ul>
