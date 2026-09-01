@@ -260,55 +260,48 @@ def dashboard():
 # __AUTOCLIP_MY_SESSIONS_V42__
 @app.route('/sessions')
 def list_sessions():
-    """Dashboard of all sessions owned by the current user."""
-    import glob
-    import os
+    """Dashboard of all sessions owned by the current user.
+
+    Reads the sessions table. This used to glob sessions/*.json, which
+    returns nothing in a container - that directory is not shipped, and
+    sessions moved to Postgres in Phase 3.5a.
+    """
     user = autoclip_auth.get_current_user()
     if not user:
         return redirect(url_for('auth.login'))
-
     db = autoclip_db.get_db()
-
-    # Load and enrich each session
+    if user['role'] == 'admin':
+        cur = db.execute(
+            "SELECT s.session_id, s.updated_at, s.data, c.title AS chan_title "
+            "FROM sessions s "
+            "LEFT JOIN channels c "
+            "  ON c.youtube_channel_id = s.data->>'channel_youtube_id' "
+            "ORDER BY s.updated_at DESC"
+        )
+    else:
+        cur = db.execute(
+            "SELECT s.session_id, s.updated_at, s.data, c.title AS chan_title "
+            "FROM sessions s "
+            "LEFT JOIN channels c "
+            "  ON c.youtube_channel_id = s.data->>'channel_youtube_id' "
+            "WHERE s.data->>'owner_user_id' = ? "
+            "ORDER BY s.updated_at DESC",
+            (str(user['id']),)
+        )
     rows = []
-    for fp in glob.glob('sessions/*.json'):
-        try:
-            with open(fp) as f:
-                s = json.load(f)
-        except Exception:
-            continue
-
-        # Ownership check: admin sees all, users see their own
-        owner = s.get('owner_user_id')
-        if user['role'] != 'admin' and owner != user['id']:
-            continue
-
-        segments = s.get('segments', [])
-        published = sum(1 for seg in segments if seg.get('youtube_video_id'))
-
-        # Channel display name
-        chan_yt_id = s.get('channel_youtube_id')
-        chan_name = '(no channel)'
-        if chan_yt_id:
-            _cr = db.execute(
-                "SELECT title FROM channels WHERE youtube_channel_id=?",
-                (chan_yt_id,)
-            ).fetchone()
-            if _cr:
-                chan_name = _cr['title']
-
+    for r in cur.fetchall():
+        d = r['data']
+        if isinstance(d, str):
+            d = json.loads(d)
+        segments = d.get('segments') or []
         rows.append({
-            'id': s.get('id'),
-            'show_name': s.get('show_name') or 'Untitled show',
-            'channel_name': chan_name,
+            'id': d.get('id') or r['session_id'],
+            'show_name': d.get('show_name') or 'Untitled show',
+            'channel_name': r['chan_title'] or '(no channel)',
             'segment_count': len(segments),
-            'published_count': published,
-            'mtime': os.path.getmtime(fp),
+            'published_count': sum(1 for x in segments if x.get('youtube_video_id')),
+            'mtime': r['updated_at'],
         })
-
-    # Sort by mtime desc (most recent first)
-    rows.sort(key=lambda r: r['mtime'], reverse=True)
-
     return render_template('sessions.html', sessions=rows, current_user=user)
 
 
