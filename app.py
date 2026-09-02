@@ -49,7 +49,7 @@ app.register_blueprint(autoclip_auth.bp)
 
 
 PUBLIC_PATH_PREFIXES = ('/static/', '/login', '/logout', '/auth/', '/pending-approval')
-PUBLIC_EXACT_PATHS = {'/', '/pricing', '/privacy'}
+PUBLIC_EXACT_PATHS = {'/', '/pricing', '/privacy', '/terms'}
 
 @app.before_request
 def _enforce_auth_globally():
@@ -243,6 +243,12 @@ def landing():
     if user and user['is_approved']:
         return redirect(url_for('dashboard'))
     return render_template('landing.html')
+
+@app.route('/terms')
+def terms():
+    """Public terms of service. Required for the YouTube API audit form."""
+    return render_template('terms.html')
+
 
 @app.route('/privacy')
 def privacy():
