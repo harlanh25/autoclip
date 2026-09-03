@@ -736,6 +736,7 @@ def detect_segments(session_id):
     If topics are provided, GPT is asked to locate each one. If omitted, GPT
     is asked to auto-discover the show's segments.
     """
+    app.logger.info('DETECT_TRACE 1 entered session=%s', session_id)
     session = load_session(session_id)
     if not session:
         return jsonify({'error': 'Session not found'}), 404
@@ -843,8 +844,10 @@ Return ONLY a JSON object:
     # and we prepend the brace back before parsing.
     raw_segs = None
     _detect_err = None
+    app.logger.info('DETECT_TRACE 3 anthropic_client=%s', anthropic_client is not None)
     if anthropic_client is not None:
         try:
+            app.logger.info('DETECT_TRACE 4 calling tracked_claude')
             _resp = tracked_claude(
                 _session_id=session_id,
                 model=SEGMENT_MODEL,
