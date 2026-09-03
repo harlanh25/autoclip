@@ -2210,11 +2210,9 @@ def upload_to_youtube(session_id):
 
     # Multi-tenant: load token for the session's channel
     _channel_yt_id = session.get('channel_youtube_id')
-    if _channel_yt_id:
-        creds_path = BASE_DIR / 'credentials' / 'tokens' / f'{_channel_yt_id}.json'
-    else:
-        # Legacy fallback for pre-multitenant sessions
-        creds_path = BASE_DIR / 'credentials' / 'power2_token.json'
+    if not _channel_yt_id:
+        return jsonify({'error': 'This session predates multi-tenant channels and has no channel attached. Re-create it from the dashboard.'}), 400
+    creds_path = BASE_DIR / 'credentials' / 'tokens' / f'{_channel_yt_id}.json'
     if not creds_path.exists():
         return jsonify({'error': f'YouTube credentials not found for this channel ({_channel_yt_id or "none"}). Visit /channels to connect it.'}), 400
 
@@ -2316,39 +2314,6 @@ def upload_to_youtube(session_id):
     })
 
 
-
-@app.route('/api/youtube_channels', methods=['GET'])
-def get_youtube_channels():
-    """List all YouTube channels accessible with the current token."""
-    creds_path = BASE_DIR / 'credentials' / 'power2_token.json'
-    if not creds_path.exists():
-        return jsonify({'error': 'YouTube credentials not found. Visit /authorize first.'}), 400
-    with open(creds_path) as f:
-        creds_data = json.load(f)
-    creds = Credentials(
-        token=creds_data['token'],
-        refresh_token=creds_data['refresh_token'],
-        token_uri='https://oauth2.googleapis.com/token',
-        client_id=creds_data['client_id'],
-        client_secret=creds_data['client_secret']
-    )
-    if creds.expired:
-        creds.refresh(google.auth.transport.requests.Request())
-    youtube = build('youtube', 'v3', credentials=creds)
-    response = youtube.channels().list(part='snippet', mine=True).execute()
-    channels = [
-        {
-            'id': ch['id'],
-            'title': ch['snippet']['title'],
-            'thumbnail': ch['snippet']['thumbnails']['default']['url']
-        }
-        for ch in response.get('items', [])
-    ]
-    return jsonify({'channels': channels})
-
-# ─────────────────────────────────────────
-#  ROUTES — Ad Library
-# ─────────────────────────────────────────
 
 @app.route('/api/ads', methods=['GET'])
 def get_ads():
@@ -2653,9 +2618,6 @@ def save_ads(ads):
 #  YOUTUBE OAUTH CALLBACK
 # ─────────────────────────────────────────
 
-CREDENTIALS_DIR = BASE_DIR / 'credentials'
-CLIENT_SECRET    = CREDENTIALS_DIR / 'power2_client_secret.json'
-TOKEN_FILE       = CREDENTIALS_DIR / 'power2_token.json'
 def _oauth_redirect_uri():
     """The OAuth callback URL for whichever host is serving this request.
 
@@ -2671,11 +2633,6 @@ def _oauth_redirect_uri():
 
 OAUTH_REDIRECT   = 'https://autoclip.cloud/oauth2callback'
 
-YOUTUBE_SCOPES = [
-    'https://www.googleapis.com/auth/youtube.upload',
-    'https://www.googleapis.com/auth/youtube.readonly',
-    'https://www.googleapis.com/auth/youtube.force-ssl'
-]
 
 @app.route('/authorize')
 def authorize():
