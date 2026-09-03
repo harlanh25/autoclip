@@ -22,7 +22,17 @@ L4_GPU_PER_HOUR      = 0.71
 GCS_STORE_PER_GB_MO  = 0.020
 GCS_EGRESS_PER_GB    = 0.12
 
-FIXED_MONTHLY = 108.80            # VM + disk + IP + misc, not per-user
+# Post-Cloud-Run-migration, Sep 2026. Built from component rates rather than
+# a past bill, since the architecture changed on 2026-09-03 and no full month
+# has been billed under it yet. Revisit against the September invoice.
+#   e2-small VM (podcast sync only)      13.00
+#   VM disk 30GB standard PD              1.20
+#   static IP                             3.00
+#   Cloud SQL db-f1-micro + 10GB          9.00
+#   Cloud Run web + worker (usage-based)  8.00
+#   Cloud Storage (~85GB, falls once the 30-day lifecycle bites)  2.00
+#   Artifact Registry, Cloud Tasks, net   2.00
+FIXED_MONTHLY = 38.00             # platform cost, not attributable to a user
 
 
 def record(db, user_id, kind, cost_usd, quantity=None, unit=None,

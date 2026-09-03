@@ -3587,6 +3587,12 @@ def tracked_claude(_user_id=None, _session_id=None, _segment_index=None, **kwarg
                 autoclip_db.get_db(), _user_id, resp,
                 model=kwargs.get('model', SEGMENT_MODEL),
                 session_id=_session_id, segment_index=_segment_index)
+            app.logger.info('CLAUDE_COST recorded user=%s session=%s in=%s out=%s',
+                            _user_id, _session_id,
+                            getattr(getattr(resp, 'usage', None), 'input_tokens', '?'),
+                            getattr(getattr(resp, 'usage', None), 'output_tokens', '?'))
+        else:
+            app.logger.warning('CLAUDE_COST skipped: no user_id resolved, session=%s', _session_id)
     except Exception:
         app.logger.exception('claude cost record failed')
     return resp
