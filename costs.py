@@ -145,7 +145,44 @@ def all_user_costs(db, month=None):
         f"  ON e.user_id = u.id AND {clause} "
         f"GROUP BY u.id ORDER BY cost DESC", args
     ).fetchall()
-    return [dict(r) for r in rows]
+    out = [dict(r) for r in rows]
+
+    # Published output per user. Raw event counts conflate a title
+    # regeneration with a published clip, so count the two things that
+    # actually represent delivered value instead.
+    clip_clause = (("%s=?" % _db.month_expr("finished_at")) if month
+                   else ("%s=%s" % (_db.month_expr("finished_at"),
+                                    _db.current_month_expr())))
+    clips = {}
+    try:
+        for r in db.execute(
+            f"SELECT user_id, COUNT(*) n FROM publish_jobs "
+            f"WHERE status='done' AND finished_at IS NOT NULL AND {clip_clause} "
+            f"GROUP BY user_id", args
+        ).fetchall():
+            clips[r[0]] = r[1]
+    except Exception:
+        log.exception('clip count failed')
+
+    ep_clause = (("%s=?" % _db.month_expr("s.synced_at")) if month
+                 else ("%s=%s" % (_db.month_expr("s.synced_at"),
+                                  _db.current_month_expr())))
+    episodes = {}
+    try:
+        for r in db.execute(
+            f"SELECT c.user_id, COUNT(*) n FROM audio_synced_episodes s "
+            f"JOIN audio_sync_configs c ON c.id = s.config_id "
+            f"WHERE {ep_clause} "
+            f"GROUP BY c.user_id", args
+        ).fetchall():
+            episodes[r[0]] = r[1]
+    except Exception:
+        log.exception('episode count failed')
+
+    for u in out:
+        u['clips_published'] = clips.get(u['id'], 0)
+        u['episodes_published'] = episodes.get(u['id'], 0)
+    return out
 
 
 def available_months(db):

@@ -73,7 +73,7 @@
       <div class="note">{% if s.gross_margin_pct is not none %}{{ '%.1f'|format(s.gross_margin_pct) }}% margin{% else %}—{% endif %}</div></div>
     <div class="kpi"><div class="label">Fixed cost</div>
       <div class="val">${{ '%.2f'|format(s.fixed_cost) }}</div>
-      <div class="note">VM, disk, IP</div></div>
+      <div class="note">VM, Cloud SQL, Cloud Run, storage</div></div>
     <div class="kpi"><div class="label">Net profit</div>
       <div class="val {{ 'pos' if s.net_profit >= 0 else 'neg' }}">${{ '%.2f'|format(s.net_profit) }}</div>
       <div class="note">{% if s.net_margin_pct is not none %}{{ '%.1f'|format(s.net_margin_pct) }}% margin{% else %}—{% endif %}</div></div>
@@ -87,7 +87,7 @@
     <thead><tr>
       <th>User</th><th>Video</th><th>Audio</th>
       <th class="r">Revenue</th><th class="r">Cost</th><th class="r">Profit</th>
-      <th class="r">Margin</th><th class="r">Events</th>
+      <th class="r">Margin</th><th class="r">Clips</th><th class="r">Audio eps</th>
     </tr></thead>
     <tbody>
       {% for u in report.users %}
@@ -99,7 +99,8 @@
         <td class="r">${{ '%.2f'|format(u.cost) }}</td>
         <td class="r {{ 'pos' if u.profit >= 0 else 'neg' }}">${{ '%.2f'|format(u.profit) }}</td>
         <td class="r">{% if u.margin_pct is not none %}<span class="{{ 'pos' if u.margin_pct >= 40 else ('warn' if u.margin_pct >= 0 else 'neg') }}">{{ '%.0f'|format(u.margin_pct) }}%</span>{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td class="r">{{ u.events }}</td>
+        <td class="r">{{ u.clips_published or 0 }}</td>
+        <td class="r">{{ u.episodes_published or 0 }}</td>
       </tr>
       {% endfor %}
     </tbody>
