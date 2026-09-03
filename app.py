@@ -250,6 +250,20 @@ def terms():
     return render_template('terms.html')
 
 
+@app.route('/api/_diag/claude')
+def _diag_claude():
+    """Admin-only. Reports whether the Anthropic client actually initialized."""
+    user = autoclip_auth.get_current_user()
+    if not user or user.get('role') != 'admin':
+        return jsonify({'error': 'admin only'}), 403
+    return jsonify({
+        'key_present': bool(ANTHROPIC_API_KEY),
+        'key_prefix': (ANTHROPIC_API_KEY[:10] + '...') if ANTHROPIC_API_KEY else None,
+        'client_initialized': anthropic_client is not None,
+        'segment_model': SEGMENT_MODEL,
+    })
+
+
 @app.route('/privacy')
 def privacy():
     """Public privacy policy. Required for Google OAuth verification."""
