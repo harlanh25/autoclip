@@ -4464,6 +4464,129 @@ def ads_library_list():
     })
 
 
+@app.route('/api/ads/library/signed-url', methods=['POST'])
+def ads_library_signed_url():
+    """Mint a signed PUT URL so the browser uploads an ad straight to GCS.
+
+    Cloud Run caps a request body at 32MB, so the multipart path below
+    fails on anything larger. Here the bytes never touch the app: the
+    browser PUTs to GCS and then calls /register. The key uses a random
+    token rather than a content hash, since the server never sees the file.
+    """
+    user = autoclip_auth.get_current_user()
+    data = request.get_json(silent=True) or {}
+    try:
+        channel_id = int(data.get('channel_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'channel_id must be int'}), 400
+    if user['role'] != 'admin':
+        if not autoclip_db.user_has_channel_access(user['id'], channel_id):
+            return jsonify({'error': 'forbidden'}), 403
+    filename = (data.get('filename') or 'ad.mp4').strip()
+    display_name = (data.get('display_name') or filename).strip() or filename
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'mp4'
+    if ext not in ('mp3', 'mp4', 'wav', 'm4a', 'mpeg', 'webm', 'aac', 'ogg'):
+        return jsonify({'error': f'unsupported extension {ext}'}), 400
+    ct_map = {
+        'mp3': 'audio/mpeg', 'mpeg': 'audio/mpeg', 'wav': 'audio/wav',
+        'mp4': 'video/mp4', 'm4a': 'audio/mp4', 'webm': 'video/webm',
+        'aac': 'audio/aac', 'ogg': 'audio/ogg',
+    }
+    content_type = ct_map.get(ext, 'application/octet-stream')
+    row = autoclip_db.get_db().execute(
+        "SELECT youtube_channel_id FROM channels WHERE id=?", (channel_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({'error': 'channel not found'}), 404
+    slug = ''.join(c if c.isalnum() else '_' for c in display_name)[:40].strip('_') or 'ad'
+    token = uuid.uuid4().hex[:10]
+    gcs_key = f"ads/{row['youtube_channel_id']}/{slug}_{token}.{ext}"
+    return jsonify({
+        'gcs_key': gcs_key,
+        'content_type': content_type,
+        'signed_url': gcs_helper.generate_upload_url(gcs_key, content_type),
+    })
+
+
+@app.route('/api/ads/library/register', methods=['POST'])
+def ads_library_register():
+    """Register an ad the browser already PUT to GCS via a signed URL.
+
+    ffprobe reads the signed read URL over HTTPS rather than a local file,
+    so a large ad is never downloaded into the container.
+    """
+    user = autoclip_auth.get_current_user()
+    data = request.get_json(silent=True) or {}
+    try:
+        channel_id = int(data.get('channel_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'channel_id must be int'}), 400
+    if user['role'] != 'admin':
+        if not autoclip_db.user_has_channel_access(user['id'], channel_id):
+            return jsonify({'error': 'forbidden'}), 403
+    gcs_key = (data.get('gcs_key') or '').strip()
+    if not gcs_key.startswith('ads/'):
+        return jsonify({'error': 'bad gcs_key'}), 400
+    display_name = (data.get('display_name') or gcs_key.rsplit('/', 1)[-1]).strip()
+    content_type = data.get('content_type') or 'application/octet-stream'
+
+    # The browser knows the size from the File object and sends it, which
+    # avoids a metadata round trip to GCS just to record one number.
+    try:
+        size_bytes = int(data.get('file_size_bytes') or 0) or None
+    except (TypeError, ValueError):
+        size_bytes = None
+
+    duration = None
+    try:
+        import json as _json
+        _read = gcs_storage.signed_url(gcs_key, expires_seconds=900)
+        proc = subprocess.run(
+            ['ffprobe', '-v', 'quiet', '-print_format', 'json',
+             '-show_format', _read],
+            capture_output=True, text=True, timeout=60
+        )
+        if proc.returncode == 0:
+            dur_str = (_json.loads(proc.stdout or '{}')
+                       .get('format', {}).get('duration'))
+            if dur_str:
+                duration = float(dur_str)
+    except Exception as e:
+        app.logger.warning('ffprobe over signed URL failed for ad: %s', e)
+
+    db = autoclip_db.get_db()
+    try:
+        _sql = autoclip_db.insert_or_ignore(
+            "INSERT OR IGNORE INTO ads "
+            "(channel_id, gcs_key, display_name, duration_sec, file_size_bytes, "
+            "content_type, created_by_user_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )
+        _params = (channel_id, gcs_key, display_name, duration, size_bytes,
+                   content_type, user['id'])
+        if autoclip_db.is_postgres():
+            ad_id = db.insert_returning_id(_sql, _params)
+        else:
+            ad_id = db.execute(_sql, _params).lastrowid
+        db.commit()
+        if not ad_id:
+            row = db.execute("SELECT id FROM ads WHERE gcs_key=?", (gcs_key,)).fetchone()
+            ad_id = row['id'] if row else None
+    except Exception as e:
+        app.logger.exception('DB insert failed for ad register')
+        return jsonify({'error': f'db insert failed: {e}'}), 500
+
+    return jsonify({
+        'status': 'uploaded',
+        'id': ad_id,
+        'gcs_key': gcs_key,
+        'display_name': display_name,
+        'duration_sec': duration,
+        'file_size_bytes': size_bytes,
+        'content_type': content_type,
+    })
+
+
 @app.route('/api/ads/library/upload', methods=['POST'])
 def ads_library_upload():
     """Upload a new ad file to GCS + register in DB with ffprobe duration."""
