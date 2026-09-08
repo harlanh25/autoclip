@@ -38,6 +38,15 @@ from flask import session as flask_session
 
 app = Flask(__name__)
 
+# Cloud Run terminates TLS at its front end and forwards to the container over
+# plain HTTP, so Flask sees http:// in request.url. oauthlib then refuses the
+# token exchange with (insecure_transport) OAuth 2 MUST utilize https. Trusting
+# one hop of X-Forwarded-* fixes request.url for the whole app, not just OAuth.
+# One hop only: on Cloud Run every request passes through Google's front end,
+# so a client cannot spoof these headers past it.
+from werkzeug.middleware.proxy_fix import ProxyFix as _ProxyFix
+app.wsgi_app = _ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
 # --- Multi-tenant additions ---
 app.secret_key = os.environ.get('AUTOCLIP_SECRET_KEY', 'dev-key-CHANGE-IN-PROD')
 app.config['SESSION_COOKIE_SECURE'] = True
