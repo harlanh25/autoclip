@@ -1809,11 +1809,30 @@ def _yt_finisher_loop():
         try:
             with app.app_context():
                 db = autoclip_db.get_db()
-                row = db.execute(
-                    "SELECT id FROM publish_jobs "
-                    "WHERE stage='compose_done' AND status='running' "
-                    "ORDER BY created_at ASC LIMIT 1"
-                ).fetchone()
+                # Claim atomically. A plain SELECT let several finisher
+                # threads - one per Cloud Run instance - pick the same job
+                # and upload it to YouTube two or three times, putting
+                # duplicates on the customer's channel and burning the
+                # daily videos.insert quota. Moving the row out of the pool
+                # in the same statement that reads it makes that impossible.
+                if autoclip_db.is_postgres():
+                    row = db.execute(
+                        "UPDATE publish_jobs SET stage='claimed', "
+                        "heartbeat_at=CURRENT_TIMESTAMP "
+                        "WHERE id = ("
+                        "  SELECT id FROM publish_jobs "
+                        "  WHERE stage='compose_done' AND status='running' "
+                        "  ORDER BY created_at ASC LIMIT 1 "
+                        "  FOR UPDATE SKIP LOCKED"
+                        ") RETURNING id"
+                    ).fetchone()
+                    db.commit()
+                else:
+                    row = db.execute(
+                        "SELECT id FROM publish_jobs "
+                        "WHERE stage='compose_done' AND status='running' "
+                        "ORDER BY created_at ASC LIMIT 1"
+                    ).fetchone()
                 if row:
                     _finish_publish_job(row['id'])
                 else:
