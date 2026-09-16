@@ -339,6 +339,9 @@
               style="margin-left:0.5rem; background:transparent; border:1px solid #444; color:#bbb;">
         Not sure? Let AutoClip pick
       </button>
+      <div id="redetect-hint" style="display:none; margin-top:0.75rem; font-size:0.85rem; color:#888;">
+        Not what you wanted? Adjust the topics above and run detection again — it replaces the segments below.
+      </div>
     </div>
 
     <!-- Step 3: Review Segments -->
@@ -570,6 +573,15 @@
 
   async function _runDetect(payload, btn) {
     const label = btn.textContent;
+    // Re-detecting replaces session['segments'] wholesale, so anything
+    // already cut or published on the current segments is lost. Only warn
+    // when there is actually something to lose.
+    if (window.__lastSegments && window.__lastSegments.some(function(x){
+          return x.clip_gcs_key || x.youtube_video_id; })) {
+      if (!confirm('Some of these segments already have clips cut or published.\n\n'
+                 + 'Re-detecting replaces all current segments and that work will be lost.\n\n'
+                 + 'Continue?')) return;
+    }
     const both = ['detect-topics-btn','detect-auto-btn']
       .map(function(i){ return document.getElementById(i); }).filter(Boolean);
     both.forEach(function(b){ b.disabled = true; });
@@ -596,6 +608,12 @@
       document.getElementById('segments-badge').textContent = '✓ Done';
       document.getElementById('segments-badge').className = 'badge done';
       document.getElementById('step2').className = 'step done';
+      // Step 2 stays usable after a run. Users kept assuming detection was
+      // one-shot because the section greys out, when re-running with an
+      // added or removed topic was always allowed.
+      document.getElementById('redetect-hint').style.display = 'block';
+      document.getElementById('detect-topics-btn').textContent = 'Re-detect with these topics';
+      document.getElementById('detect-auto-btn').textContent = 'Re-detect, let AutoClip pick';
       document.getElementById('step3').className = 'step active';
       document.getElementById('review-card').style.opacity = '1';
       document.getElementById('review-card').style.pointerEvents = 'auto';
@@ -609,6 +627,7 @@
   }
 
   function renderSegments(segments) {
+    window.__lastSegments = segments;
     const out = document.getElementById('segments-output');
     out.innerHTML = '';
 
