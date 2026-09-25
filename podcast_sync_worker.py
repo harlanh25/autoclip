@@ -29,6 +29,14 @@ from pathlib import Path
 from datetime import datetime, timezone
 import requests
 
+# Buzzsprout sits behind Cloudflare, which blocks the default
+# python-requests/x.y User-Agent outright - the request never reaches their
+# API and comes back as a 403 HTML block page rather than a JSON error.
+# Setting a descriptive default here covers every outbound call in this
+# module. Verified harmless for Spreaker (identical 200s with and without)
+# and required for Buzzsprout (403 without, 201 with).
+requests.utils.default_user_agent = lambda *a, **k: 'AutoClip/1.0 (+https://autoclip.cloud)' 
+
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "autoclip.db"
 LOG_DIR = BASE_DIR / "logs"
