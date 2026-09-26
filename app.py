@@ -3081,6 +3081,11 @@ def admin_costs():
                 'free_users': len(keep) - len(paying),
                 'free_user_cost': sum(u['cost'] for u in keep if not u['is_paying']),
                 'breakeven_users': None,
+                # Carried over - this block rebuilds the summary from
+                # scratch, so anything margin_report adds must be copied
+                # here or it vanishes on the default view.
+                'avg_publish': report['summary'].get('avg_publish'),
+                'is_all_time': report['summary'].get('is_all_time'),
             },
         }
 

@@ -49,6 +49,7 @@
   <div class="controls">
     <select onchange="location.href='/admin/costs?month='+this.value+'{{ '&founders=include' if not exclude_founders else '' }}'">
       <option value="">Current month</option>
+      <option value="all" {% if selected_month == 'all' %}selected{% endif %}>All time</option>
       {% for m in months %}
       <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}</option>
       {% endfor %}
@@ -71,12 +72,17 @@
     <div class="kpi"><div class="label">Gross profit</div>
       <div class="val {{ 'pos' if s.gross_profit >= 0 else 'neg' }}">${{ '%.2f'|format(s.gross_profit) }}</div>
       <div class="note">{% if s.gross_margin_pct is not none %}{{ '%.1f'|format(s.gross_margin_pct) }}% margin{% else %}—{% endif %}</div></div>
+    {% if not s.is_all_time %}
     <div class="kpi"><div class="label">Fixed cost</div>
       <div class="val">${{ '%.2f'|format(s.fixed_cost) }}</div>
       <div class="note">VM, Cloud SQL, Cloud Run, storage</div></div>
     <div class="kpi"><div class="label">Net profit</div>
       <div class="val {{ 'pos' if s.net_profit >= 0 else 'neg' }}">${{ '%.2f'|format(s.net_profit) }}</div>
       <div class="note">{% if s.net_margin_pct is not none %}{{ '%.1f'|format(s.net_margin_pct) }}% margin{% else %}—{% endif %}</div></div>
+    {% endif %}
+    <div class="kpi"><div class="label">Avg publish</div>
+      <div class="val">{% if s.avg_publish %}{{ '%.1f'|format(s.avg_publish.minutes) }}<span style="font-size:0.5em"> min</span>{% else %}—{% endif %}</div>
+      <div class="note">{% if s.avg_publish %}across {{ s.avg_publish.n }} clip{{ 's' if s.avg_publish.n != 1 }}{% else %}no timed jobs yet{% endif %}</div></div>
     <div class="kpi"><div class="label">Free users</div>
       <div class="val {{ 'warn' if s.free_user_cost > 0 else '' }}">{{ s.free_users }}</div>
       <div class="note">costing ${{ '%.2f'|format(s.free_user_cost) }}</div></div>

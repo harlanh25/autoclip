@@ -134,10 +134,18 @@ def user_costs(db, user_id, month=None):
 def all_user_costs(db, month=None):
     """Every user's total for a month, most expensive first."""
     import db as _db
-    clause = (("%s=?" % _db.month_expr("e.created_at")) if month
-              else ("%s=%s" % (_db.month_expr("e.created_at"),
-                               _db.current_month_expr())))
-    args = [month] if month else []
+    # month=None means the current month; month='all' drops the filter so
+    # totals cover every month on record.
+    if month == 'all':
+        clause = "1=1"
+        args = []
+    elif month:
+        clause = "%s=?" % _db.month_expr("e.created_at")
+        args = [month]
+    else:
+        clause = "%s=%s" % (_db.month_expr("e.created_at"),
+                            _db.current_month_expr())
+        args = []
     rows = db.execute(
         f"SELECT u.id, u.email, u.name, u.video_tier, u.audio_tier, "
         f"       COALESCE(SUM(e.cost_usd), 0) cost, COUNT(e.id) events "
@@ -150,9 +158,13 @@ def all_user_costs(db, month=None):
     # Published output per user. Raw event counts conflate a title
     # regeneration with a published clip, so count the two things that
     # actually represent delivered value instead.
-    clip_clause = (("%s=?" % _db.month_expr("finished_at")) if month
-                   else ("%s=%s" % (_db.month_expr("finished_at"),
-                                    _db.current_month_expr())))
+    if month == 'all':
+        clip_clause = "1=1"
+    elif month:
+        clip_clause = "%s=?" % _db.month_expr("finished_at")
+    else:
+        clip_clause = "%s=%s" % (_db.month_expr("finished_at"),
+                                 _db.current_month_expr())
     clips = {}
     try:
         for r in db.execute(
@@ -164,9 +176,13 @@ def all_user_costs(db, month=None):
     except Exception:
         log.exception('clip count failed')
 
-    ep_clause = (("%s=?" % _db.month_expr("s.synced_at")) if month
-                 else ("%s=%s" % (_db.month_expr("s.synced_at"),
-                                  _db.current_month_expr())))
+    if month == 'all':
+        ep_clause = "1=1"
+    elif month:
+        ep_clause = "%s=?" % _db.month_expr("s.synced_at")
+    else:
+        ep_clause = "%s=%s" % (_db.month_expr("s.synced_at"),
+                               _db.current_month_expr())
     episodes = {}
     try:
         for r in db.execute(
@@ -208,6 +224,41 @@ def _monthly_revenue(user, plans_mod):
     if a != 'demo':
         rev += plans_mod.AUDIO_TIERS.get(a, {}).get('price_usd', 0) or 0
     return rev
+
+
+def avg_publish_minutes(db, month=None):
+    """Mean minutes from worker pickup to published, for finished jobs.
+
+    started_at is only populated from 2026-09-26, so older jobs are
+    excluded rather than counted as instant. Returns None when there is
+    nothing to average, which the page shows as a dash.
+    """
+    import db as _db
+    if not _db.is_postgres():
+        return None
+    if month == 'all':
+        clause = "1=1"
+        args = []
+    elif month:
+        clause = "%s=?" % _db.month_expr("finished_at")
+        args = [month]
+    else:
+        clause = "%s=%s" % (_db.month_expr("finished_at"),
+                            _db.current_month_expr())
+        args = []
+    try:
+        row = db.execute(
+            "SELECT AVG(EXTRACT(EPOCH FROM (finished_at - started_at))/60.0), COUNT(*) "
+            "FROM publish_jobs "
+            "WHERE status='done' AND started_at IS NOT NULL "
+            "  AND finished_at IS NOT NULL AND " + clause, args
+        ).fetchone()
+        if not row or not row[1]:
+            return None
+        return {'minutes': float(row[0]), 'n': row[1]}
+    except Exception:
+        log.exception('avg publish time failed')
+        return None
 
 
 def margin_report(db, plans_mod, month=None):
@@ -254,5 +305,7 @@ def margin_report(db, plans_mod, month=None):
             'free_user_cost': sum(u['cost'] for u in free),
             'breakeven_users': (FIXED_MONTHLY / (gross / len(paying))
                                 if paying and gross > 0 else None),
+            'avg_publish': avg_publish_minutes(db, month),
+            'is_all_time': month == 'all',
         },
     }
