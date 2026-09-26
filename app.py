@@ -1560,7 +1560,16 @@ def _finish_publish_job(job_id):
 
             _tmp = _tempfile_v42y.mkdtemp(prefix='autoclip_finisher_')
             local_composed = _os_v42y.path.join(_tmp, 'composed.mp4')
+            # Timed so a slow publish can be attributed. created_at to
+            # finished_at hides whether the time went on the download, the
+            # YouTube upload, or waiting in the queue.
+            _dl_t0 = _time_v42y.time()
             gcs_storage.download_from_gcs(composed_key, local_composed)
+            _dl_secs = _time_v42y.time() - _dl_t0
+            _mb = _os_v42y.path.getsize(local_composed) / (1024 ** 2)
+            app.logger.warning(
+                'PUBLISH_TIMING job=%s phase=download mb=%.1f secs=%.1f mbps=%.1f',
+                job_id, _mb, _dl_secs, (_mb / _dl_secs) if _dl_secs else 0)
 
             # Cost: pulling the composed file out of GCS is billable egress
             try:
@@ -1659,6 +1668,7 @@ def _finish_publish_job(job_id):
             media = MediaFileUpload(local_composed, mimetype='video/mp4', resumable=True, chunksize=8*1024*1024)
             req = yt.videos().insert(part='snippet,status', body=body, media_body=media)
 
+            _ul_t0 = _time_v42y.time()
             response = None
             last_pct = 95
             while response is None:
@@ -1669,6 +1679,11 @@ def _finish_publish_job(job_id):
                         db.execute("UPDATE publish_jobs SET progress_pct=?, heartbeat_at=CURRENT_TIMESTAMP WHERE id=?", (p, job_id))
                         db.commit()
                         last_pct = p
+
+            _ul_secs = _time_v42y.time() - _ul_t0
+            app.logger.warning(
+                'PUBLISH_TIMING job=%s phase=youtube_upload mb=%.1f secs=%.1f mbps=%.1f',
+                job_id, _mb, _ul_secs, (_mb / _ul_secs) if _ul_secs else 0)
 
             video_id = response.get('id')
             if not video_id:
@@ -2014,6 +2029,14 @@ def publish_job_worker_update(job_id):
     # Always bump heartbeat
     updates['heartbeat_at'] = 'CURRENT_TIMESTAMP'
 
+    # Auto-set started_at the first time the worker reports real work.
+    # Without it, created_at to finished_at conflates queue time with work
+    # time, so there is no way to tell whether a slow publish was waiting
+    # on a busy worker or genuinely moving a large file. COALESCE keeps the
+    # first value - later updates must not reset it.
+    if updates.get('status') == 'running' or updates.get('stage') == 'downloading_clip':
+        updates['started_at'] = 'COALESCE(started_at, CURRENT_TIMESTAMP)'
+
     # Auto-set finished_at when reaching a terminal status
     if updates.get('status') in ('done', 'failed'):
         updates['finished_at'] = 'CURRENT_TIMESTAMP'
@@ -2022,8 +2045,8 @@ def publish_job_worker_update(job_id):
     pieces = []
     vals = []
     for k, v in updates.items():
-        if v == 'CURRENT_TIMESTAMP':
-            pieces.append(f'{k}=CURRENT_TIMESTAMP')
+        if v in ('CURRENT_TIMESTAMP', 'COALESCE(started_at, CURRENT_TIMESTAMP)'):
+            pieces.append(f'{k}={v}')
         else:
             pieces.append(f'{k}=?')
             vals.append(v)
