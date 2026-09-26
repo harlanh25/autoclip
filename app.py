@@ -1523,7 +1523,7 @@ _YT_FINISHER_STARTED = False
 _YT_FINISHER_LOCK = _threading_v42y.Lock()
 # A publish legitimately takes minutes - the longest clean run observed was
 # 12. 30 minutes without a heartbeat means the container is gone.
-STALE_JOB_MINUTES = 30
+STALE_JOB_MINUTES = 90
 
 
 def _finish_publish_job(job_id):
@@ -1806,36 +1806,55 @@ def _sweep_stale_temp_dirs(max_age_hours=2):
     if freed:
         app.logger.info(f'startup sweep: removed {freed} stale temp dir(s)')
 def _reap_stale_publish_jobs(db):
-    """Fail publish jobs whose worker vanished without reporting.
+    """Recover publish jobs whose container vanished mid-step.
 
-    The finisher runs as a daemon thread inside a web container, so a Cloud
-    Run recycle mid-download or mid-upload kills it with no exception
-    handler reached and no status written. The job then sits as 'running'
-    forever - five accumulated silently between Sep 11 and Sep 24 before
-    anyone noticed.
+    The finisher runs as a daemon thread inside a web container. Cloud Run
+    picks traffic-free instances to scale down, and a thread doing work
+    does not count as traffic - so an instance quietly downloading a 600MB
+    file looks idle and gets killed. The thread dies with no handler
+    reached and no status written, leaving the job 'running' forever. Five
+    accumulated silently between Sep 11 and Sep 24 before anyone noticed.
 
-    This does not retry. An abandoned job may already have pushed bytes to
-    YouTube, and blind retries produced three duplicate videos on one clip
-    on Sep 9. Surfacing the failure is the job here; deciding what to do
-    about it is the user's.
+    Jobs that died before reaching YouTube are requeued: the composed file
+    is still in GCS, so it costs nothing but the upload. Jobs that died
+    mid-upload are failed instead - bytes may already have arrived, and
+    retrying one on Sep 9 put three copies of a clip on a customer's
+    channel.
+
+    This treats the symptom. The cause is that long work lives in a
+    request-serving container.
     """
     if not autoclip_db.is_postgres():
         return
     try:
         rows = db.execute(
-            "SELECT id FROM publish_jobs "
+            "SELECT id, stage, composed_gcs_key FROM publish_jobs "
             "WHERE status='running' "
             "  AND heartbeat_at < CURRENT_TIMESTAMP - INTERVAL '%d minutes'"
             % STALE_JOB_MINUTES
         ).fetchall()
         for r in rows:
-            db.execute(
-                "UPDATE publish_jobs SET status='failed', "
-                "error=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
-                ('Publishing stopped unexpectedly and did not resume. '
-                 'Nothing was published. Please try publishing again.', r['id']))
-            app.logger.error('REAPED stale publish job %s - no heartbeat for %d+ min',
-                             r['id'], STALE_JOB_MINUTES)
+            # Safe to retry only before anything reached YouTube. A job that
+            # died during uploading_youtube may already have pushed bytes;
+            # retrying one on Sep 9 put three copies of a clip on a
+            # customer's channel. Those get failed for a human to look at.
+            if r['stage'] in ('claimed', 'downloading_composed') and r['composed_gcs_key']:
+                db.execute(
+                    "UPDATE publish_jobs SET stage='compose_done', progress_pct=90, "
+                    "heartbeat_at=CURRENT_TIMESTAMP WHERE id=?", (r['id'],))
+                app.logger.warning(
+                    'REQUEUED stale publish job %s from %s - composed file still in GCS',
+                    r['id'], r['stage'])
+            else:
+                db.execute(
+                    "UPDATE publish_jobs SET status='failed', "
+                    "error=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
+                    ('Publishing stopped partway through the YouTube upload and could '
+                     'not be resumed automatically. Check the channel before retrying, '
+                     'in case part of the video was received.', r['id']))
+                app.logger.error(
+                    'FAILED stale publish job %s at stage %s - not safe to auto-retry',
+                    r['id'], r['stage'])
         if rows:
             db.commit()
     except Exception:
