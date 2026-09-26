@@ -1521,6 +1521,9 @@ import traceback as _traceback_v42y
 
 _YT_FINISHER_STARTED = False
 _YT_FINISHER_LOCK = _threading_v42y.Lock()
+# A publish legitimately takes minutes - the longest clean run observed was
+# 12. 30 minutes without a heartbeat means the container is gone.
+STALE_JOB_MINUTES = 30
 
 
 def _finish_publish_job(job_id):
@@ -1802,6 +1805,43 @@ def _sweep_stale_temp_dirs(max_age_hours=2):
                 pass
     if freed:
         app.logger.info(f'startup sweep: removed {freed} stale temp dir(s)')
+def _reap_stale_publish_jobs(db):
+    """Fail publish jobs whose worker vanished without reporting.
+
+    The finisher runs as a daemon thread inside a web container, so a Cloud
+    Run recycle mid-download or mid-upload kills it with no exception
+    handler reached and no status written. The job then sits as 'running'
+    forever - five accumulated silently between Sep 11 and Sep 24 before
+    anyone noticed.
+
+    This does not retry. An abandoned job may already have pushed bytes to
+    YouTube, and blind retries produced three duplicate videos on one clip
+    on Sep 9. Surfacing the failure is the job here; deciding what to do
+    about it is the user's.
+    """
+    if not autoclip_db.is_postgres():
+        return
+    try:
+        rows = db.execute(
+            "SELECT id FROM publish_jobs "
+            "WHERE status='running' "
+            "  AND heartbeat_at < CURRENT_TIMESTAMP - INTERVAL '%d minutes'"
+            % STALE_JOB_MINUTES
+        ).fetchall()
+        for r in rows:
+            db.execute(
+                "UPDATE publish_jobs SET status='failed', "
+                "error=?, finished_at=CURRENT_TIMESTAMP WHERE id=?",
+                ('Publishing stopped unexpectedly and did not resume. '
+                 'Nothing was published. Please try publishing again.', r['id']))
+            app.logger.error('REAPED stale publish job %s - no heartbeat for %d+ min',
+                             r['id'], STALE_JOB_MINUTES)
+        if rows:
+            db.commit()
+    except Exception:
+        app.logger.exception('stale job reaper failed')
+
+
 def _yt_finisher_loop():
     """Poll for compose_done jobs, run finisher on each."""
     app.logger.info('YT finisher thread started')
@@ -1809,6 +1849,7 @@ def _yt_finisher_loop():
         try:
             with app.app_context():
                 db = autoclip_db.get_db()
+                _reap_stale_publish_jobs(db)
                 # Claim atomically. A plain SELECT let several finisher
                 # threads - one per Cloud Run instance - pick the same job
                 # and upload it to YouTube two or three times, putting
