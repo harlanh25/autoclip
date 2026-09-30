@@ -80,6 +80,23 @@ def current_period() -> str:
 # YouTube helpers
 # ----------------------------------------------------------------------
 
+def _iso8601_to_seconds(iso):
+    """Parse a YouTube ISO-8601 duration (PT1H31M11S) into seconds.
+
+    Returns None on anything unrecognised rather than raising - a duration
+    we cannot parse must not stop an episode from syncing, it just means
+    the download cannot be length-checked.
+    """
+    import re as _re
+    m = _re.fullmatch(
+        r'P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', iso or '')
+    if not m:
+        return None
+    d, h, mi, sec = (int(x) if x else 0 for x in m.groups())
+    total = d * 86400 + h * 3600 + mi * 60 + sec
+    return total or None
+
+
 def fetch_playlist_videos(playlist_id: str, max_results: int = 20):
     """Return newest videos in a playlist. Each item = {videoId, title, publishedAt}."""
     if not YOUTUBE_API_KEY:
@@ -111,25 +128,54 @@ def fetch_playlist_videos(playlist_id: str, max_results: int = 20):
     # videos.list call (up to 50 ids) and attach them.
     ids = [i["videoId"] for i in items if i.get("videoId")]
     descs = {}
+    durations = {}
     for start in range(0, len(ids), 50):
         chunk = ids[start:start + 50]
         try:
+            # contentDetails costs no extra quota on a call already being
+            # made, and gives the authoritative video length. A live-recorded
+            # VOD can download short and silently succeed - one 91-minute
+            # show went out to listeners as 16 minutes on 2026-09-28 - so the
+            # length is needed to verify the download.
             vr = requests.get(
                 "https://www.googleapis.com/youtube/v3/videos",
-                params={"part": "snippet", "id": ",".join(chunk),
+                params={"part": "snippet,contentDetails", "id": ",".join(chunk),
                         "key": YOUTUBE_API_KEY},
                 timeout=30,
             )
             vr.raise_for_status()
             for v in vr.json().get("items", []):
                 descs[v.get("id")] = (v.get("snippet") or {}).get("description") or ""
+                iso = (v.get("contentDetails") or {}).get("duration")
+                if iso:
+                    durations[v.get("id")] = _iso8601_to_seconds(iso)
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(
-                "videos.list description fetch failed: %s", e)
+                "videos.list metadata fetch failed: %s", e)
     for i in items:
         i["description"] = descs.get(i.get("videoId"), "")
+        i["durationSec"] = durations.get(i.get("videoId"))
     return items
+
+
+def _probe_duration(path):
+    """Seconds of audio in a local file, or None if ffprobe cannot tell.
+
+    None means unverifiable, not zero. The caller treats that as a failure
+    and retries on the next sync rather than publishing an episode whose
+    length it could not confirm.
+    """
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+             "-of", "csv=p=0", path],
+            capture_output=True, text=True, timeout=60)
+        if r.returncode != 0:
+            return None
+        return float((r.stdout or "").strip())
+    except Exception:
+        return None
 
 
 def download_audio(video_id: str, out_path: str) -> str:
@@ -471,6 +517,31 @@ def process_config(conn, config: dict) -> int:
                         if not candidates:
                             raise RuntimeError("yt-dlp produced no output file")
                         mp3_path = str(candidates[0])
+
+                    # Verify the download is the whole show. A live-recorded
+                    # VOD can come back truncated with yt-dlp still exiting 0:
+                    # a 91-minute episode went out to every feed as 16 minutes
+                    # on 2026-09-28. Raising marks the episode failed, and
+                    # because dedup only skips status='success' rows the next
+                    # hourly sync retries it. Nothing unverified is published -
+                    # an episode an hour late beats a truncated one.
+                    _want = v.get("durationSec")
+                    _got = _probe_duration(mp3_path)
+                    if not _want:
+                        raise RuntimeError(
+                            "YouTube returned no duration for this video, so the "
+                            "download cannot be verified. Will retry next sync.")
+                    if _got is None:
+                        raise RuntimeError(
+                            "could not measure the downloaded audio, so its length "
+                            "is unverified. Will retry next sync.")
+                    if _got < _want * 0.95:
+                        raise RuntimeError(
+                            f"truncated download: got {_got/60:.1f} min of "
+                            f"{_want/60:.1f} min ({_got/_want*100:.0f}%). "
+                            f"Will retry next sync.")
+                    log.info(f"[cfg={config_id}]   {video_id}: length OK "
+                             f"({_got/60:.1f}/{_want/60:.1f} min)")
 
                     # has_platform_ads: some destinations (Buzzsprout,
                     # Simplecast) require the podcaster to manually approve
