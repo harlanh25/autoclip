@@ -1523,7 +1523,7 @@ _YT_FINISHER_STARTED = False
 _YT_FINISHER_LOCK = _threading_v42y.Lock()
 # A publish legitimately takes minutes - the longest clean run observed was
 # 12. 30 minutes without a heartbeat means the container is gone.
-STALE_JOB_MINUTES = 90
+STALE_JOB_MINUTES = 240
 
 
 def _finish_publish_job(job_id):
