@@ -90,14 +90,37 @@ def upload_bytes_to_gcs(data_bytes, gcs_key, content_type=None):
     return gcs_key
 
 
-def download_from_gcs(gcs_key, local_path):
-    """Download a GCS object to a local path."""
-    blob = get_bucket().blob(gcs_key)
-    if not blob.exists():
-        raise FileNotFoundError(f"GCS object not found: {gcs_key}")
+def download_from_gcs(gcs_key, local_path, _attempt=0):
+    """Download a GCS object to a local path.
+
+    Retries on transient transport errors. The storage client is a
+    module-level singleton, and since min-instances=1 keeps a container
+    alive indefinitely its connection pool outlives the connections in it -
+    a pooled socket that GCS has closed surfaces as
+    SSL: UNEXPECTED_EOF_WHILE_READING. Two publishes died that way on
+    2026-09-29 and 2026-09-30, both on consecutive clips of one session.
+
+    On a transport failure the client is dropped so the next attempt builds
+    a fresh pool, rather than reaching for the same dead socket.
+    """
     Path(local_path).parent.mkdir(parents=True, exist_ok=True)
-    blob.download_to_filename(local_path)
-    return local_path
+    try:
+        # No blob.exists() pre-check: it is a second round trip that can
+        # fail on its own - the 2026-09-30 failure was on that call, not
+        # the transfer - and download_to_filename already raises for a missing object.
+        get_bucket().blob(gcs_key).download_to_filename(local_path)
+        return local_path
+    except Exception:
+        # Retry twice on anything transport-level. A genuinely missing
+        # object costs three wasted seconds and still raises, which is a
+        # better trade than a NameError inside the handler.
+        if _attempt >= 2:
+            raise
+        global _client
+        _client = None
+        import time as _t
+        _t.sleep(2 ** _attempt)
+        return download_from_gcs(gcs_key, local_path, _attempt + 1)
 
 
 def download_bytes(gcs_key):

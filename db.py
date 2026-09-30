@@ -12,6 +12,16 @@ import pgcompat
 
 DB_PATH = str(Path.home() / "cfb_clip_studio" / "autoclip.db")
 
+# Free trial length. Raised from 7 to 30 on 2026-09-29: these are
+# weekly shows, so a week could cover one episode and a creator who
+# signed up midweek might never record inside the window.
+TRIAL_DAYS = 30
+
+# Free trial length. Raised from 7 to 30 on 2026-09-29: these are
+# weekly shows, so a week could cover one episode and a creator who
+# signed up midweek might never record inside the window.
+TRIAL_DAYS = 30
+
 
 def get_conn():
     """Standalone connection, no Flask involvement.
@@ -122,8 +132,12 @@ def create_or_update_user(google_id, email, name, picture_url):
     else:
         role = 'admin' if is_bootstrap_admin else 'member'
         is_approved = 1 if is_bootstrap_admin else 0
-        trial_expr = ("CURRENT_TIMESTAMP + INTERVAL '7 days'"
-                      if is_postgres() else "datetime('now', '+7 days')")
+        # 30 days rather than the original 7. These are weekly shows - a
+        # 7-day window could cover a single episode, and a creator who
+        # signed up midweek could lose the trial before recording at all.
+        trial_expr = ("CURRENT_TIMESTAMP + INTERVAL '%d days'" % TRIAL_DAYS
+                      if is_postgres()
+                      else "datetime('now', '+%d days')" % TRIAL_DAYS)
         sql = (
             "INSERT INTO users (google_id, email, name, picture_url, role, is_approved, last_login_at, "
             "trial_started_at, trial_expires_at) "

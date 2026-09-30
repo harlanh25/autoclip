@@ -1870,7 +1870,35 @@ def _reap_stale_publish_jobs(db):
                 app.logger.error(
                     'FAILED stale publish job %s at stage %s - not safe to auto-retry',
                     r['id'], r['stage'])
-        if rows:
+        # Also requeue jobs that failed outright at downloading_composed.
+        # Transient GCS transport errors kill these, and resetting them by
+        # hand has worked every time - so do it automatically. Only this
+        # stage: a job that died during uploading_youtube may already have
+        # sent bytes, and retrying one on Sep 9 put three copies of a clip
+        # on a customer's channel.
+        #
+        # publish_jobs has no attempt column, so the retry marker lives in
+        # the error text. A job that has already been auto-retried once is
+        # left alone for a human, rather than looping forever on something
+        # permanently broken.
+        failed = db.execute(
+            "SELECT id, error FROM publish_jobs "
+            "WHERE status='failed' AND stage='downloading_composed' "
+            "  AND composed_gcs_key IS NOT NULL "
+            "  AND youtube_video_id IS NULL "
+            "  AND finished_at > CURRENT_TIMESTAMP - INTERVAL '24 hours' "
+            "  AND COALESCE(error,'') NOT LIKE '[auto-retried]%'"
+        ).fetchall()
+        for r in failed:
+            db.execute(
+                "UPDATE publish_jobs SET status='running', stage='compose_done', "
+                "progress_pct=90, finished_at=NULL, error=?, "
+                "heartbeat_at=CURRENT_TIMESTAMP WHERE id=?",
+                ('[auto-retried] ' + (r['error'] or '')[:800], r['id']))
+            app.logger.warning(
+                'AUTO-RETRY publish job %s - failed at downloading_composed, '
+                'composed file still in GCS', r['id'])
+        if rows or failed:
             db.commit()
     except Exception:
         app.logger.exception('stale job reaper failed')
