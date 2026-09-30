@@ -325,7 +325,22 @@ def spreaker_create_episode(api_key: str, show_id: str, title: str, audio_path: 
             log.error("Spreaker rejected %s: %s %s", what, resp.status_code, resp.text)
         resp.raise_for_status()
         body = resp.json() or {}
-        return (body.get("response") or {}).get("episode") or {}
+        ep = (body.get("response") or {}).get("episode") or {}
+        # Log what Spreaker says it received. The download is verified
+        # against YouTube's duration before we get here, but a 72-minute
+        # verified download appeared on the feed as 21 minutes on
+        # 2026-09-30 - and with the local file and the episode both gone
+        # there was no way to tell whether the upload or Spreaker lost it.
+        # Spreaker reports duration in milliseconds.
+        try:
+            _ms = ep.get("duration")
+            log.info("Spreaker %s: episode_id=%s reported_duration=%s min (sent %.1f MB)",
+                     what, ep.get("episode_id"),
+                     ("%.1f" % (_ms / 60000.0)) if _ms else "unknown",
+                     os.path.getsize(audio_path) / (1024.0 ** 2))
+        except Exception:
+            log.warning("could not log Spreaker upload result", exc_info=False)
+        return ep
 
     if publish:
         with open(audio_path, "rb") as f:
