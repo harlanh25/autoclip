@@ -505,6 +505,21 @@ def process_config(conn, config: dict) -> int:
             )
         }
         new_videos = [v for v in videos if v["videoId"] not in already]
+
+        # A deleted video never comes back, but it stays in the playlist and
+        # was being retried every hour indefinitely - three were, for days.
+        # That is pointless load on an IP YouTube already rate-limits.
+        # YouTube labels these "Deleted video" in the playlist itself, which
+        # is the reliable signal: yt-dlp only reports "Video unavailable",
+        # which can also mean a video that is still processing.
+        # "Private video" is deliberately NOT skipped - a creator who
+        # publishes private and flips to public later needs the retry.
+        _deleted = [v for v in new_videos if (v.get("title") or "") == "Deleted video"]
+        if _deleted:
+            log.info(f"[cfg={config_id}] skipping {len(_deleted)} deleted video(s): "
+                     + ", ".join(v["videoId"] for v in _deleted))
+            new_videos = [v for v in new_videos if (v.get("title") or "") != "Deleted video"]
+
         log.info(f"[cfg={config_id}] {len(new_videos)} new videos to sync")
 
         # Process oldest-first so podcast order is chronological
