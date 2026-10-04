@@ -1521,9 +1521,15 @@ import traceback as _traceback_v42y
 
 _YT_FINISHER_STARTED = False
 _YT_FINISHER_LOCK = _threading_v42y.Lock()
-# A publish legitimately takes minutes - the longest clean run observed was
-# 12. 30 minutes without a heartbeat means the container is gone.
-STALE_JOB_MINUTES = 240
+# How long a job can go without a heartbeat before it is treated as dead.
+# Was 240, sized against two jobs that took ~100 minutes on 2026-09-29 -
+# but the timing logs showed only 4.6 and 6.6 minutes of that was actual
+# transfer; the rest was waiting for a container to exist at all.
+# min-instances=1 removed that wait and publishes now finish in a couple
+# of minutes, so 240 just meant a stalled clip sat for four hours.
+# 45 still leaves wide margin: heartbeat_at only updates at stage
+# transitions, so a large download looks frozen for its whole transfer.
+STALE_JOB_MINUTES = 45
 
 
 def _finish_publish_job(job_id):
