@@ -110,6 +110,7 @@
         <td>
           <select class="video-tier-select" data-user-id="{{ u.id }}" onchange="setTier({{ u.id }}, 'video_tier', this.value)" style="background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 0.85rem;">
             <option value="demo"  {% if u.video_tier == 'demo' %}selected{% endif %}>Demo</option>
+            <option value="free"  {% if u.video_tier == 'free' %}selected{% endif %}>Free (comped)</option>
             <option value="tier1" {% if u.video_tier == 'tier1' %}selected{% endif %}>Starter ($49.99)</option>
             <option value="tier2" {% if u.video_tier == 'tier2' %}selected{% endif %}>Pro ($79.99)</option>
             <option value="tier3" {% if u.video_tier == 'tier3' %}selected{% endif %}>Studio ($149.99)</option>
@@ -118,6 +119,7 @@
         <td>
           <select class="audio-tier-select" data-user-id="{{ u.id }}" onchange="setTier({{ u.id }}, 'audio_tier', this.value)" style="background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 0.85rem;">
             <option value="demo"  {% if u.audio_tier == 'demo' %}selected{% endif %}>Demo</option>
+            <option value="free"  {% if u.audio_tier == 'free' %}selected{% endif %}>Free (comped)</option>
             <option value="tier1" {% if u.audio_tier == 'tier1' %}selected{% endif %}>Starter ($24.99)</option>
             <option value="tier2" {% if u.audio_tier == 'tier2' %}selected{% endif %}>Pro ($39.99)</option>
             <option value="tier3" {% if u.audio_tier == 'tier3' %}selected{% endif %}>Studio ($49.99)</option>
