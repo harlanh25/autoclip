@@ -10,6 +10,11 @@ import from here. This is the file that changes when pricing changes.
 
 VIDEO_TIERS = {
     'demo':  {'name': 'Demo',    'price_usd': 0,      'monthly_cap': 3,   'stripe_price_id': None},
+    # Comped access for friendly channels testing the product. Not shown on
+    # /pricing and not purchasable - an admin sets it directly. Capped rather
+    # than unlimited: these run the same GPU pipeline as a paying customer,
+    # and an enthusiastic tester with no ceiling is an unbounded bill.
+    'free':  {'name': 'Free',    'price_usd': 0,      'monthly_cap': 500, 'stripe_price_id': None},
     'tier1': {'name': 'Starter', 'price_usd': 49.99,  'monthly_cap': 20,  'stripe_price_id': None},
     'tier2': {'name': 'Pro',     'price_usd': 79.99,  'monthly_cap': 50,  'stripe_price_id': None},
     'tier3': {'name': 'Studio',  'price_usd': 149.99, 'monthly_cap': 200, 'stripe_price_id': None},
@@ -17,6 +22,7 @@ VIDEO_TIERS = {
 
 AUDIO_TIERS = {
     'demo':  {'name': 'Demo',    'price_usd': 0,     'monthly_cap': 3,   'stripe_price_id': None},
+    'free':  {'name': 'Free',    'price_usd': 0,     'monthly_cap': 500, 'stripe_price_id': None},
     'tier1': {'name': 'Starter', 'price_usd': 24.99, 'monthly_cap': 30,  'stripe_price_id': None},
     'tier2': {'name': 'Pro',     'price_usd': 39.99, 'monthly_cap': 100, 'stripe_price_id': None},
     'tier3': {'name': 'Studio',  'price_usd': 49.99, 'monthly_cap': 500, 'stripe_price_id': None},

@@ -148,7 +148,7 @@
   <h2 class="section-title">🎬 Video Only</h2>
   <div class="tier-grid">
     {% for key, t in video_tiers.items() %}
-    {% if key != 'demo' %}
+    {% if key not in ('demo', 'free') %}
     {% set is_current = plan.get('video_tier_key') == key and not plan.is_bundle %}
     <div class="tier-card {% if key == 'tier2' %}featured{% endif %} {% if is_current %}current{% endif %}">
       <div class="tier-name">Video {{ t.name }}</div>
@@ -168,7 +168,7 @@
   <h2 class="section-title">🎧 Audio Only</h2>
   <div class="tier-grid">
     {% for key, t in audio_tiers.items() %}
-    {% if key != 'demo' %}
+    {% if key not in ('demo', 'free') %}
     {% set is_current = plan.get('audio_tier_key') == key and not plan.is_bundle %}
     <div class="tier-card {% if key == 'tier2' %}featured{% endif %} {% if is_current %}current{% endif %}">
       <div class="tier-name">Audio {{ t.name }}</div>

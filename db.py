@@ -324,8 +324,10 @@ def set_user_tier(user_id, video_tier=None, audio_tier=None):
     """Update a user's tier(s). Also toggles has_clipping/has_audio and applies cap defaults."""
     from datetime import datetime
     # Cap defaults per tier (must match plans.py)
-    VIDEO_CAPS = {'demo': 3, 'tier1': 20, 'tier2': 50, 'tier3': 200}
-    AUDIO_CAPS = {'demo': 999999, 'tier1': 30, 'tier2': 100, 'tier3': 500}
+    # 'free' is comped access for friendly channels testing the product -
+    # set by an admin, never purchasable, not shown on /pricing.
+    VIDEO_CAPS = {'demo': 3, 'free': 500, 'tier1': 20, 'tier2': 50, 'tier3': 200}
+    AUDIO_CAPS = {'demo': 999999, 'free': 500, 'tier1': 30, 'tier2': 100, 'tier3': 500}
     updates = []
     values = []
     if video_tier:
