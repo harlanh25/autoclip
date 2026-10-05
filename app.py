@@ -69,7 +69,8 @@ def _enforce_auth_globally():
     if any(path.startswith(p) for p in PUBLIC_PATH_PREFIXES):
         return
     # Worker callbacks use X-Worker-Secret auth, not session cookies
-    if path.startswith('/api/publish_jobs/') and path.endswith('/worker_update'):
+    if path.startswith('/api/publish_jobs/') and (
+            path.endswith('/worker_update') or path.endswith('/finish')):
         return
     # Stripe webhooks come from Stripe's servers - authenticated by signature
     if path == '/api/stripe/webhook':
@@ -155,7 +156,8 @@ def _gate_expired_trials():
         return
     if any(path.startswith(p) for p in TRIAL_GATE_EXEMPT_PREFIX):
         return
-    if path.startswith('/api/publish_jobs/') and path.endswith('/worker_update'):
+    if path.startswith('/api/publish_jobs/') and (
+            path.endswith('/worker_update') or path.endswith('/finish')):
         return
     try:
         import plans as _plans
@@ -2040,6 +2042,77 @@ def _enqueue_publish_task(job_id, session_id, segment_index, segment, session):
     return resp.name
 
 
+@app.route('/api/publish_jobs/<int:job_id>/finish', methods=['POST'])
+def publish_job_finish(job_id):
+    """Run the YouTube publish step. Called by Cloud Tasks, not by a browser.
+
+    Same shared secret as worker_update. Returning 5xx makes Cloud Tasks
+    retry, which is what we want on a dropped connection mid-transfer -
+    those used to surface to the user as a failed clip.
+    """
+    secret = _os_v42.environ.get('WORKER_SHARED_SECRET', '')
+    if not secret or request.headers.get('X-Worker-Secret', '') != secret:
+        app.logger.warning('Rejected finish for job %s: bad secret', job_id)
+        return jsonify({'error': 'unauthorized'}), 401
+
+    db = autoclip_db.get_db()
+    row = db.execute(
+        "SELECT status, stage, youtube_video_id FROM publish_jobs WHERE id=?",
+        (job_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({'error': 'no such job'}), 404
+    # Already published - a Cloud Tasks retry must not upload a second copy.
+    if row['youtube_video_id']:
+        app.logger.info('finish: job %s already has a video id, skipping', job_id)
+        return jsonify({'status': 'already published'}), 200
+
+    try:
+        _finish_publish_job(job_id)
+    except Exception:
+        app.logger.exception('finish task failed for job %s', job_id)
+        return jsonify({'error': 'finish failed'}), 500
+    return jsonify({'status': 'ok'}), 200
+
+
+def _enqueue_finish_task(job_id):
+    """Queue the YouTube publish step as a Cloud Task calling back into this app.
+
+    The finisher used to run in a daemon thread. Cloud Run picks traffic-free
+    instances to scale down and a thread does not count as traffic, so an
+    instance quietly moving a 600MB file looked idle and got killed - jobs
+    then sat 'running' forever with nothing written. As a real HTTP request
+    the instance stays up, and Cloud Tasks retries a failure instead of
+    leaving it stranded.
+    """
+    from google.cloud import tasks_v2
+
+    project = _os_v42.environ.get('CLOUD_TASKS_PROJECT', 'youtube-podcast-sync-502121')
+    location = _os_v42.environ.get('CLOUD_TASKS_LOCATION', 'us-east4')
+    queue = _os_v42.environ.get('CLOUD_TASKS_QUEUE', 'autoclip-jobs')
+    base = _os_v42.environ.get('PUBLIC_BASE_URL', '').rstrip('/')
+    secret = _os_v42.environ.get('WORKER_SHARED_SECRET', '')
+
+    if not base or not secret:
+        raise RuntimeError('PUBLIC_BASE_URL and WORKER_SHARED_SECRET required')
+
+    client = tasks_v2.CloudTasksClient()
+    parent = client.queue_path(project, location, queue)
+    task = {
+        'http_request': {
+            'http_method': tasks_v2.HttpMethod.POST,
+            'url': f'{base}/api/publish_jobs/{job_id}/finish',
+            'headers': {'Content-Type': 'application/json',
+                        'X-Worker-Secret': secret},
+            'body': b'{}',
+        },
+        'dispatch_deadline': {'seconds': 1800},
+    }
+    resp = client.create_task(parent=parent, task=task)
+    app.logger.info('finish task enqueued: %s for job %s', resp.name, job_id)
+    return resp.name
+
+
 @app.route('/api/publish_jobs/<int:job_id>/worker_update', methods=['POST'])
 def publish_job_worker_update(job_id):
     """Callback endpoint the Cloud Run worker uses to report status.
@@ -2093,6 +2166,19 @@ def publish_job_worker_update(job_id):
 
     if n == 0:
         return jsonify({'error': 'job not found'}), 404
+
+    # Compose is done, so hand the YouTube publish to Cloud Tasks rather than
+    # waiting for the daemon thread to notice. Enqueued after the commit so
+    # the row already reads compose_done when the task arrives. A failure
+    # here is not fatal - the finisher thread still polls for the same jobs,
+    # and the atomic claim means only one of them wins.
+    if updates.get('stage') == 'compose_done':
+        try:
+            _enqueue_finish_task(job_id)
+        except Exception:
+            app.logger.exception(
+                'could not enqueue finish task for job %s; the finisher '
+                'thread will pick it up instead', job_id)
 
     app.logger.info(f'worker_update job {job_id}: {list(updates.keys())}')
     return jsonify({'ok': True})
