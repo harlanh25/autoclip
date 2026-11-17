@@ -178,6 +178,31 @@ def _probe_duration(path):
         return None
 
 
+# Residential proxy for YouTube downloads. The VM's datacenter IP was
+# blocked outright on 2026-11-17 - 1,624 bot-detection failures and zero
+# successes in 24 hours - and unlike the September block it did not
+# recover on its own. YTDLP_PROXY holds a full proxy URL; without it set,
+# downloads go direct and will fail while the IP stays flagged.
+YTDLP_PROXY = os.environ.get("YTDLP_PROXY", "")
+
+
+def _proxy_for_this_download():
+    """Proxy URL with a fresh sticky session, or '' when none is configured.
+
+    The session id in the username picks which residential IP the request
+    exits from. Randomising it per download spreads traffic across the
+    pool rather than funnelling every request through one address, which
+    is how the datacenter IP got itself flagged.
+    """
+    if not YTDLP_PROXY:
+        return ""
+    import re as _re
+    import random as _rand
+    return _re.sub(r"-session-\d+-",
+                   "-session-%d-" % _rand.randint(10000000, 99999999),
+                   YTDLP_PROXY)
+
+
 def download_audio(video_id: str, out_path: str) -> str:
     """Download a video's audio track using yt-dlp. Returns the path to the audio file."""
     # -x = extract audio, --audio-format mp3, quiet output
@@ -189,6 +214,11 @@ def download_audio(video_id: str, out_path: str) -> str:
         "-o", out_path,
         "--no-warnings",
         "--quiet",
+    ]
+    _proxy = _proxy_for_this_download()
+    if _proxy:
+        cmd += ["--proxy", _proxy]
+    cmd += [
         f"https://www.youtube.com/watch?v={video_id}",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
